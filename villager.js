@@ -1,10 +1,10 @@
 let _vid = 0;
 
 class Villager {
-  // 1 sec = 1 hour
+  // New game clock: 1 real second = 1 in-game day.
+  // So 30 seconds = 1 in-game month.
   static DAYS_PER_MONTH = 30;
-  static HOURS_PER_DAY = 24;
-  static SECONDS_PER_MONTH = Villager.DAYS_PER_MONTH * Villager.HOURS_PER_DAY;
+  static SECONDS_PER_MONTH = Villager.DAYS_PER_MONTH;
   static BABY_MATURE_MONTHS = 10;
 
   constructor(civ, world, rng, x, y, options = {}) {
@@ -35,7 +35,7 @@ class Villager {
 
     this.lifeExpectancy = 80 + rng.int(0, 40) + (this.genes.stamina - 1) * 8;
     this.fertile = !this.isBaby;
-    this.reproTimer = options.reproTimer ?? rng.int(120, 360);
+    this.reproTimer = options.reproTimer ?? rng.int(20, 60);
 
     this.job = this.isBaby ? 'BABY' : 'IDLE';
     this.state = this.isBaby ? 'GROW' : 'WANDER'; // GROW | WANDER | WORK | EAT | SLEEP | FLEE | FIGHT | GOTO
@@ -43,7 +43,7 @@ class Villager {
     this.home = null;
     this.dead = false;
 
-    this.speed = (1.2 + rng.next() * 0.6) * this.genes.speed;
+    this.speed = (1.7 + rng.next() * 0.8) * this.genes.speed;
     this.attackPower = Math.max(1, Math.round((5 + rng.int(0, 10)) * this.genes.strength));
     this.attackRange = 1.2;
     this.attackCooldown = 0;
@@ -134,7 +134,7 @@ class Villager {
   }
 
   canReproduce() {
-    return !this.dead && !this.isBaby && this.fertile && this.age >= 18 && this.age < 45 && this.health > 55 && this.hunger < 65 && this.energy > 25 && this.reproTimer <= 0;
+    return !this.dead && !this.isBaby && this.fertile && this.age >= 18 && this.age < 45 && this.health > 50 && this.hunger < 78 && this.energy > 20 && this.reproTimer <= 0;
   }
 
   assignJob(job) {
@@ -156,8 +156,8 @@ class Villager {
     }
 
     const fitness = Math.max(0.45, this.environmentFitness);
-    const hungerRate = (this.isBaby ? 0.45 : 0.8) * this.genes.metabolism / fitness;
-    const energyUse = (this.isBaby ? 0.22 : 0.5) / this.genes.stamina;
+    const hungerRate = (this.isBaby ? 0.08 : 0.18) * this.genes.metabolism / fitness;
+    const energyUse = (this.isBaby ? 0.08 : 0.18) / this.genes.stamina;
 
     this.hunger += dt * hungerRate;
     this.energy -= dt * energyUse;
@@ -195,7 +195,7 @@ class Villager {
         this.target = { x: this.x + dx / len * 8, y: this.y + dy / len * 8 };
       }
 
-      if (this.hunger > 55) this.state = 'EAT';
+      if (this.hunger > 75) this.state = 'EAT';
 
       if (this.state === 'FLEE') this._moveToTarget(dt);
       else if (this.state === 'EAT') this._doEat(dt);
@@ -234,9 +234,9 @@ class Villager {
       const partner = this.civ.findMate(this);
       if (partner) {
         this.civ.birthVillager(this, partner);
-        const delay = Math.round((220 + rng.int(0, 280)) / this.genes.fertility);
+        const delay = Math.round((30 + rng.int(0, 60)) / this.genes.fertility);
         this.reproTimer = delay;
-        partner.reproTimer = delay + rng.int(0, 120);
+        partner.reproTimer = delay + rng.int(0, 30);
       }
     }
   }
@@ -251,16 +251,16 @@ class Villager {
     this.health = Math.max(this.health, 80);
     this.job = 'IDLE';
     this.state = 'WANDER';
-    this.speed = (1.2 + rng.next() * 0.6) * this.genes.speed;
+    this.speed = (1.7 + rng.next() * 0.8) * this.genes.speed;
     this.attackPower = Math.max(1, Math.round((5 + rng.int(0, 10)) * this.genes.strength));
-    this.reproTimer = 80 + rng.int(0, 180);
+    this.reproTimer = 20 + rng.int(0, 50);
     this.civ.world.addEvent(`🌱 ${this.name} matured into an adult in ${this.civ.name}.`, this.civ.color, { overlay: false });
   }
 
   _decideState(rng) {
-    this.stateTimer = 0.2 + rng.next() * 1.2;
+    this.stateTimer = 0.6 + rng.next() * 1.4;
 
-    if (this.hunger > 60) { this.state = 'EAT'; return; }
+    if (this.hunger > 85) { this.state = 'EAT'; return; }
 
     if (this.job === 'SOLDIER') {
       const enemy = this.civ.findNearestEnemy(this.x, this.y, 20);
@@ -308,14 +308,29 @@ class Villager {
   }
 
   _doEat(dt) {
-    if (this.hunger < 20) { this.state = this.isBaby ? 'GROW' : 'WANDER'; return; }
-    // Consume civ food stock
-    const eatRate = this.isBaby ? 9 : 15;
-    const eat = Math.min(dt * eatRate, this.hunger, this.civ.resources.food);
+    if (this.hunger < 15) {
+      this.state = this.isBaby ? 'GROW' : 'WANDER';
+      return;
+    }
+
+    // Eat fast, then go back to doing useful things.
+    // If there is no food, do not stand in EAT forever.
+    const eatRate = this.isBaby ? 35 : 75;
+    const eat = Math.min(dt * eatRate, this.hunger - 10, this.civ.resources.food);
+
+    if (eat <= 0.001) {
+      this.state = this.isBaby ? 'GROW' : 'WANDER';
+      this.stateTimer = 1.0;
+      return;
+    }
+
     this.hunger -= eat;
     this.civ.resources.food -= eat;
-    if (this.civ.resources.food <= 0) { this.civ.resources.food = 0; }
-    if (this.hunger <= 0) this.state = this.isBaby ? 'GROW' : 'WANDER';
+    if (this.civ.resources.food <= 0) this.civ.resources.food = 0;
+
+    if (this.hunger <= 15) {
+      this.state = this.isBaby ? 'GROW' : 'WANDER';
+    }
   }
 
   _doWork(dt, rng) {
@@ -324,10 +339,10 @@ class Villager {
       this.workTimer = 3 + rng.next() * 2;
       const res = this.civ.resources;
       const rate = this.genes.workRate * Math.max(0.6, this.environmentFitness);
-      if (this.job === 'FARMER')  res.food  = Math.min(9999, res.food  + 5 * rate);
-      if (this.job === 'WOODCUT') res.wood  = Math.min(9999, res.wood  + 3 * rate);
-      if (this.job === 'MINER')   res.stone = Math.min(9999, res.stone + 2 * rate);
-      if (this.job === 'HUNTER')  res.food  = Math.min(9999, res.food  + 3 * rate);
+      if (this.job === 'FARMER')  res.food  = Math.min(9999, res.food  + 20 * rate);
+      if (this.job === 'WOODCUT') res.wood  = Math.min(9999, res.wood  + 30 * rate);
+      if (this.job === 'MINER')   res.stone = Math.min(9999, res.stone + 10 * rate);
+      if (this.job === 'HUNTER')  res.food  = Math.min(9999, res.food  + 50 * rate);
     }
     // Move toward a resource node
     if (!this.target || this._dist(this.target) < 1) {

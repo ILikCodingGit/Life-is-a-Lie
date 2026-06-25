@@ -78,11 +78,18 @@ const Renderer = {
     if (!Game.world) return;
 
     const worldPx = Game.world.size * Game.world.tileSize;
-    const maxX = Math.max(0, worldPx - this.canvas.width / this.cam.zoom);
-    const maxY = Math.max(0, worldPx - this.canvas.height / this.cam.zoom);
+    const viewW = this.canvas.width / this.cam.zoom;
+    const viewH = this.canvas.height / this.cam.zoom;
 
-    this.cam.x = Math.max(0, Math.min(maxX, this.cam.x));
-    this.cam.y = Math.max(0, Math.min(maxY, this.cam.y));
+    // Allow the camera to pan a bit past the map edges. This keeps the map from
+    // being hard-glued to the left/top/right of the screen when zoomed out.
+    const margin = Math.max(viewW, viewH) * 0.45;
+
+    const maxX = Math.max(-margin, worldPx - viewW + margin);
+    const maxY = Math.max(-margin, worldPx - viewH + margin);
+
+    this.cam.x = Math.max(-margin, Math.min(maxX, this.cam.x));
+    this.cam.y = Math.max(-margin, Math.min(maxY, this.cam.y));
   },
 
   centerOn(wx, wy) {

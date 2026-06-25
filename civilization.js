@@ -13,15 +13,16 @@ class Civilization {
     this.townhall = null;
     this.dead = false;
 
-    this.resources = { food: 500, wood: 200, stone: 100, gold: 50, iron: 25 };
+    this.resources = { food: 1500, wood: 250, stone: 120, gold: 50, iron: 25 };
     this.influence = 0;
     this.relations = {};  // civId -> 'neutral'|'ally'|'war'
 
     this.aiTimer = 0;
     this.buildTimer = 0;
     this.warTarget = null;
-    this.maxPopulation = 250;
+    this.maxPopulation = 500;
     this.stats = { born: 0, matured: 0, died: 0, battlesWon: 0, buildingsBuilt: 0 };
+    this.jobTimer = 0;
   }
 
   get population() {
@@ -74,7 +75,7 @@ class Civilization {
     this.stats.born++;
 
     const biome = this.world.getDominantBiomeAt(tile.x, tile.y);
-    this.world.addEvent(`👶 ${v.name} was born in ${this.name}. Genes biased toward ${biome}.`, this.color, { overlay: false });
+    this.world.addEvent(`👶 ${v.name} born (${biome})`, this.color, { overlay: false });
 
     return v;
   }
@@ -167,13 +168,13 @@ class Civilization {
     }
 
     // Passive resource generation
-    this.resources.food = Math.min(9999, this.resources.food + dt * 0.5 * (this.getBuildingCount('FARM') + 1));
-    this.resources.wood = Math.min(9999, this.resources.wood + dt * 0.3 * (this.getBuildingCount('LUMBERCAMP') + 1));
-    this.resources.stone = Math.min(9999, this.resources.stone + dt * 0.2 * (this.getBuildingCount('MINE') + 1));
+    this.resources.food = Math.min(99999, this.resources.food + dt * 1.4 * (this.getBuildingCount('FARM') + 1));
+    this.resources.wood = Math.min(99999, this.resources.wood + dt * 0.35 * (this.getBuildingCount('LUMBERCAMP') + 1));
+    this.resources.stone = Math.min(99999, this.resources.stone + dt * 0.25 * (this.getBuildingCount('MINE') + 1));
 
     // Food consumption. Babies count, but less than adults.
-    const foodPressure = this.adultPopulation + this.babyPopulation * 0.35;
-    this.resources.food = Math.max(0, this.resources.food - dt * foodPressure * 0.05);
+    const foodPressure = this.adultPopulation + this.babyPopulation * 0.20;
+    this.resources.food = Math.max(0, this.resources.food - dt * foodPressure * 0.012);
 
     // Influence gain
     this.influence += dt * (this.adultPopulation * 0.01 + this.buildings.length * 0.02);
@@ -192,8 +193,13 @@ class Civilization {
       this._tryBuild();
     }
 
-    // Assign jobs
-    this._assignJobs();
+    // Assign jobs only occasionally. Reassigning every frame makes job icons flash
+    // and cancels useful behaviour before villagers can move anywhere.
+    this.jobTimer -= dt;
+    if (this.jobTimer <= 0) {
+      this.jobTimer = 12;
+      this._assignJobs();
+    }
   }
 
   _assignJobs() {
@@ -205,30 +211,46 @@ class Civilization {
     const pop = adults.length;
     if (pop === 0) return;
 
-    const jobs = [];
-    const soldier_ratio = this.warTarget ? 0.35 : 0.15;
-    const soldiers = Math.floor(pop * soldier_ratio);
-    const farmers = Math.max(1, Math.floor(pop * 0.3));
-    const woodcut = Math.max(1, Math.floor(pop * 0.2));
-    const miners = Math.max(0, Math.floor(pop * 0.1));
+    // Early economies need farmers, not huge standing armies.
+    const soldierRatio = this.warTarget ? 0.16 : 0.04;
 
-    for (let i = 0; i < pop; i++) {
-      if (i < soldiers) jobs.push('SOLDIER');
-      else if (i < soldiers + farmers) jobs.push('FARMER');
-      else if (i < soldiers + farmers + woodcut) jobs.push('WOODCUT');
-      else if (i < soldiers + farmers + woodcut + miners) jobs.push('MINER');
-      else jobs.push('IDLE');
+    const required = {
+      SOLDIER: Math.floor(pop * soldierRatio),
+      FARMER:  Math.max(1, Math.floor(pop * 0.42)),
+      WOODCUT: Math.max(1, Math.floor(pop * 0.22)),
+      MINER:   Math.max(0, Math.floor(pop * 0.12)),
+      IDLE:    0
+    };
+
+    const usedSlots = Object.values(required).reduce((a, b) => a + b, 0);
+    required.IDLE = Math.max(0, pop - usedSlots);
+
+    const kept = { SOLDIER: 0, FARMER: 0, WOODCUT: 0, MINER: 0, IDLE: 0 };
+    const unassigned = [];
+
+    // First pass: keep existing jobs when possible, so icons do not constantly flash.
+    for (const v of adults) {
+      const job = required[v.job] !== undefined ? v.job : 'IDLE';
+      if (kept[job] < required[job]) {
+        kept[job]++;
+        if (v.job !== job) v.assignJob(job);
+      } else {
+        unassigned.push(v);
+      }
     }
 
-    // Shuffle job order a tiny bit so the same villager is not always soldier forever.
-    for (let i = jobs.length - 1; i > 0; i--) {
-      const j = this.rng.int(0, i + 1);
-      [jobs[i], jobs[j]] = [jobs[j], jobs[i]];
+    // Second pass: fill missing job slots.
+    const jobOrder = ['FARMER', 'WOODCUT', 'MINER', 'SOLDIER', 'IDLE'];
+    for (const job of jobOrder) {
+      while (kept[job] < required[job] && unassigned.length > 0) {
+        const v = unassigned.shift();
+        v.assignJob(job);
+        kept[job]++;
+      }
     }
 
-    for (let i = 0; i < adults.length; i++) {
-      adults[i].assignJob(jobs[i % jobs.length]);
-    }
+    // Anything left becomes idle instead of being shuffled randomly every cycle.
+    for (const v of unassigned) v.assignJob('IDLE');
   }
 
   _tryBuild() {
@@ -299,7 +321,7 @@ class Civilization {
     other.relations[this.id] = 'war';
     this.warTarget = other;
     other.warTarget = this;
-    this.world.addEvent(`⚔ ${this.name} declares war on ${other.name}!`, '#c84040');
+    this.world.addEvent(`⚔ ${this._eventName(this)} → ${this._eventName(other)}`, '#c84040', { overlay: false });
   }
 
   makePeace(other) {
@@ -307,7 +329,13 @@ class Civilization {
     other.relations[this.id] = 'neutral';
     if (this.warTarget === other) this.warTarget = null;
     if (other.warTarget === this) other.warTarget = null;
-    this.world.addEvent(`🕊 ${this.name} and ${other.name} make peace.`, '#7ec850');
+    this.world.addEvent(`🕊 ${this._eventName(this)} + ${this._eventName(other)} make peace`, '#7ec850', { overlay: false });
+  }
+
+
+  _eventName(civ) {
+    const short = civ.name.split(' ').pop();
+    return `<span style="color:${civ.color}">■ ${short}</span>`;
   }
 
   getBuildingCount(type) {

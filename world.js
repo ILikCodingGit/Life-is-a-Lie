@@ -252,7 +252,7 @@ class World {
     if (this.events.length > 300) this.events.pop();
 
     // Browser dev console, plus the in-game console if it exists.
-    console.log(`[Y${this.year} M${this.month} D${this.day} ${String(this.dayTime).padStart(2, '0')}:00] ${msg}`);
+    console.log(`[Y${this.year} M${this.month} D${this.day} ${String(this.dayTime).padStart(2, '0')}:00] ${String(msg).replace(/<[^>]*>/g, '')}`);
     if (typeof UI !== 'undefined' && UI.addConsoleEvent) UI.addConsoleEvent(event);
   }
 }
