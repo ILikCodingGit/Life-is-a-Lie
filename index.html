@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LifeIsALie</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="screen-menu" class="screen active">
+  <div class="menu-bg"></div>
+  <div class="menu-content">
+    <h1 class="game-title">LifeIsALie</h1>
+    <p class="game-subtitle">A civilization rises. A civilization falls. Life is a lie.</p>
+
+    <div class="world-gen-panel">
+      <h2>World Generation</h2>
+      <div class="sliders-grid">
+        <label>Map Size
+          <select id="sl-mapsize">
+            <option value="96">Small (96×96)</option>
+            <option value="128" selected>Medium (128×128)</option>
+            <option value="192">Large (192×192)</option>
+          </select>
+        </label>
+        <label>Seed
+          <input type="number" id="sl-seed" value="0" min="0" max="999999">
+        </label>
+        <label>Forest Density <span id="lbl-forest">50%</span>
+          <input type="range" id="sl-forest" min="0" max="100" value="50">
+        </label>
+        <label>Water / Lakes <span id="lbl-water">40%</span>
+          <input type="range" id="sl-water" min="0" max="100" value="40">
+        </label>
+        <label>Mountains <span id="lbl-mountain">25%</span>
+          <input type="range" id="sl-mountain" min="0" max="100" value="25">
+        </label>
+        <label>Desert <span id="lbl-desert">15%</span>
+          <input type="range" id="sl-desert" min="0" max="100" value="15">
+        </label>
+        <label>Resource Abundance <span id="lbl-resource">60%</span>
+          <input type="range" id="sl-resource" min="0" max="100" value="60">
+        </label>
+        <label>Civilizations <span id="lbl-civcount">4</span>
+          <input type="range" id="sl-civcount" min="2" max="8" value="4">
+        </label>
+        <label>Starting Pop / Civ <span id="lbl-startpop">12</span>
+          <input type="range" id="sl-startpop" min="5" max="40" value="12">
+        </label>
+      </div>
+      <button id="btn-generate" class="btn-primary">Generate World &amp; Play</button>
+    </div>
+  </div>
+</div>
+
+<div id="screen-game" class="screen">
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="hud-top">
+    <div id="hud-civs"></div>
+    <div id="hud-year">Year 1</div>
+    <div id="hud-speed">
+      <button id="btn-pause" title="Pause">⏸</button>
+      <button id="btn-speed1" title="1×" class="active">1×</button>
+      <button id="btn-speed2" title="2×">2×</button>
+      <button id="btn-speed4" title="4×">4×</button>
+      <button id="btn-menu" title="Menu">☰</button>
+    </div>
+  </div>
+
+  <div id="hud-bottom">
+    <div id="tooltip-panel"></div>
+    <div id="legend-panel">
+      <span class="leg-item"><span class="leg-dot" style="background:#5d8c3e"></span>Grass</span>
+      <span class="leg-item"><span class="leg-dot" style="background:#2d6a1e"></span>Forest</span>
+      <span class="leg-item"><span class="leg-dot" style="background:#2a5f8f"></span>Water</span>
+      <span class="leg-item"><span class="leg-dot" style="background:#888"></span>Mountain</span>
+      <span class="leg-item"><span class="leg-dot" style="background:#c9a84c"></span>Desert</span>
+    </div>
+  </div>
+
+  <div id="sidebar">
+    <div id="sidebar-header">Selected</div>
+    <div id="sidebar-body">Click a unit or building</div>
+  </div>
+</div>
+
+<script src="noise.js"></script>
+<script src="data.js"></script>
+<script src="world.js"></script>
+<script src="villager.js"></script>
+<script src="civilization.js"></script>
+<script src="combat.js"></script>
+<script src="renderer.js"></script>
+<script src="ui.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
