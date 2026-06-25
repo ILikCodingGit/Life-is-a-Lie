@@ -5,6 +5,10 @@ const Combat = {
       if (civ.dead) continue;
       for (const v of civ.villagers) {
         if (v.dead || v.job !== 'SOLDIER') continue;
+        if (v.state !== 'FIGHT' && civ.warTarget) {
+          const obj = civ.getWarObjective?.(v.x, v.y);
+          if (obj) { v.target = obj; v.state = 'FIGHT'; }
+        }
         if (v.state !== 'FIGHT') continue;
 
         // If no villager target, check nearby enemy buildings

@@ -13,32 +13,29 @@ class Civilization {
     this.townhall = null;
     this.dead = false;
 
-    this.resources = { food: 1500, wood: 250, stone: 120, gold: 50, iron: 25 };
+    this.resources = { food: 1200, wood: 260, stone: 120, gold: 50, iron: 25 };
     this.influence = 0;
     this.relations = {};  // civId -> 'neutral'|'ally'|'war'
 
     this.aiTimer = 0;
     this.buildTimer = 0;
     this.warTarget = null;
-    this.maxPopulation = 500;
+    this.maxPopulation = 300;
     this.stats = { born: 0, matured: 0, died: 0, battlesWon: 0, buildingsBuilt: 0 };
     this.jobTimer = 0;
   }
 
-  get population() {
-    return this.villagers.length;
+  get population() { return this.villagers.length; }
+  get adultPopulation() { return this.villagers.filter(v => !v.dead && !v.isBaby).length; }
+  get babyPopulation() { return this.villagers.filter(v => !v.dead && v.isBaby).length; }
+  get alive() { return !this.dead && this.townhall !== null && !(this.townhall.hp <= 0); }
+
+  shortName() {
+    return this.name.split(' ').slice(-1)[0] || this.name;
   }
 
-  get adultPopulation() {
-    return this.villagers.filter(v => !v.dead && !v.isBaby).length;
-  }
-
-  get babyPopulation() {
-    return this.villagers.filter(v => !v.dead && v.isBaby).length;
-  }
-
-  get alive() {
-    return !this.dead && this.townhall !== null && !(this.townhall.hp <= 0);
+  colorName() {
+    return `<span style="color:${this.color}">■ ${this.shortName()}</span>`;
   }
 
   spawnVillagers(count, spawnX, spawnY) {
@@ -62,7 +59,6 @@ class Civilization {
     if (!tile) return null;
 
     const genes = Villager.inheritGenes(parentA, parentB, this.world, this.rng, tile.x, tile.y);
-
     const v = new Villager(this, this.world, this.rng, tile.x, tile.y, {
       isBaby: true,
       monthAge: 0,
@@ -75,18 +71,14 @@ class Civilization {
     this.stats.born++;
 
     const biome = this.world.getDominantBiomeAt(tile.x, tile.y);
-    this.world.addEvent(`👶 ${v.name} born (${biome})`, this.color, { overlay: false });
-
+    this.world.addEvent(`👶 ${v.name} born (${biome}) in ${this.colorName()}.`, this.color, { overlay: false });
     return v;
   }
 
-  onVillagerDeath(v, reason) {
-    this.stats.died++;
-  }
+  onVillagerDeath(v, reason) { this.stats.died++; }
 
   findMate(v) {
     if (!v.canReproduce()) return null;
-
     let best = null;
     let bestScore = -Infinity;
 
@@ -94,30 +86,20 @@ class Civilization {
       if (other === v || other.dead) continue;
       if (!other.canReproduce()) continue;
       const d = Math.hypot(other.x - v.x, other.y - v.y);
-      if (d > 4) continue;
+      if (d > 5) continue;
 
-      // Prefer healthy nearby partners with environment-suited genes.
-      const score =
-        other.health * 0.4 +
-        (100 - other.hunger) * 0.2 +
-        other.environmentFitness * 30 -
-        d * 5;
-
-      if (score > bestScore) {
-        bestScore = score;
-        best = other;
-      }
+      const score = other.health * 0.4 + (100 - other.hunger) * 0.2 + other.environmentFitness * 30 - d * 5;
+      if (score > bestScore) { bestScore = score; best = other; }
     }
-
     return best;
   }
 
-  findNearestEnemy(x, y, range) {
+  findNearestEnemy(x, y, range = Infinity) {
     let best = null, bestDist = range;
     for (const [id, rel] of Object.entries(this.relations)) {
       if (rel !== 'war') continue;
       const enemyCiv = Game.civs.find(c => c.id === parseInt(id));
-      if (!enemyCiv) continue;
+      if (!enemyCiv || enemyCiv.dead) continue;
       for (const v of enemyCiv.villagers) {
         if (v.dead) continue;
         const d = Math.hypot(v.x - x, v.y - y);
@@ -127,10 +109,35 @@ class Civilization {
     return best;
   }
 
+  findNearestEnemyBuilding(x, y, range = Infinity) {
+    let best = null, bestDist = range;
+    for (const b of this.world.buildings) {
+      if (!b.civ || b.civ === this || b.hp <= 0) continue;
+      if (this.relations[b.civ.id] !== 'war') continue;
+      const cx = b.tx + b.def.width / 2;
+      const cy = b.ty + b.def.height / 2;
+      const d = Math.hypot(cx - x, cy - y);
+      if (d < bestDist) { bestDist = d; best = b; }
+    }
+    return best;
+  }
+
+  getWarObjective(x, y) {
+    if (!this.warTarget || this.warTarget.dead) return null;
+    const nearbyEnemy = this.findNearestEnemy(x, y, 45);
+    if (nearbyEnemy) return nearbyEnemy;
+
+    const nearbyBuilding = this.findNearestEnemyBuilding(x, y, 80);
+    if (nearbyBuilding) return nearbyBuilding;
+
+    if (this.warTarget.townhall && this.warTarget.townhall.hp > 0) return this.warTarget.townhall;
+    if (this.warTarget.buildings.length) return this.warTarget.buildings[0];
+    return this.findNearestEnemy(x, y, Infinity);
+  }
+
   findWorkTarget(job) {
     if (!this.townhall) return null;
     const cx = this.townhall.tx + 1.5, cy = this.townhall.ty + 1.5;
-    // Find nearby resource
     let best = null, bestDist = 99999;
     for (const res of this.world.resources) {
       if (res.amount <= 0) continue;
@@ -148,53 +155,43 @@ class Civilization {
   update(dt, allCivs) {
     if (this.dead) return;
 
-    // Remove dead villagers
     for (let i = this.villagers.length - 1; i >= 0; i--) {
       if (this.villagers[i].dead) this.villagers.splice(i, 1);
     }
 
-    // Check extinction
     if (this.villagers.length === 0 && this.world.year > 2) {
       this.dead = true;
-      this.world.addEvent(`${this.name} has fallen.`, this.color);
+      this.world.addEvent(`☠ ${this.colorName()} has fallen.`, this.color);
       return;
     }
 
-    // Update villagers
     for (const v of this.villagers) {
       const wasBaby = v.isBaby;
       v.update(dt, this.rng);
       if (wasBaby && !v.isBaby) this.stats.matured++;
     }
 
-    // Passive resource generation
-    this.resources.food = Math.min(99999, this.resources.food + dt * 1.4 * (this.getBuildingCount('FARM') + 1));
-    this.resources.wood = Math.min(99999, this.resources.wood + dt * 0.35 * (this.getBuildingCount('LUMBERCAMP') + 1));
-    this.resources.stone = Math.min(99999, this.resources.stone + dt * 0.25 * (this.getBuildingCount('MINE') + 1));
+    this.resources.food = Math.min(9999, this.resources.food + dt * 1.6 * (this.getBuildingCount('FARM') + 1));
+    this.resources.wood = Math.min(9999, this.resources.wood + dt * 0.45 * (this.getBuildingCount('LUMBERCAMP') + 1));
+    this.resources.stone = Math.min(9999, this.resources.stone + dt * 0.3 * (this.getBuildingCount('MINE') + 1));
 
-    // Food consumption. Babies count, but less than adults.
-    const foodPressure = this.adultPopulation + this.babyPopulation * 0.20;
-    this.resources.food = Math.max(0, this.resources.food - dt * foodPressure * 0.012);
+    const foodPressure = this.adultPopulation + this.babyPopulation * 0.25;
+    this.resources.food = Math.max(0, this.resources.food - dt * foodPressure * 0.018);
 
-    // Influence gain
     this.influence += dt * (this.adultPopulation * 0.01 + this.buildings.length * 0.02);
 
-    // AI decisions
     this.aiTimer -= dt;
     if (this.aiTimer <= 0) {
-      this.aiTimer = 5 + this.rng.next() * 5;
+      this.aiTimer = 4 + this.rng.next() * 6;
       this._aiDecide(allCivs);
     }
 
-    // Building
     this.buildTimer -= dt;
     if (this.buildTimer <= 0) {
-      this.buildTimer = 15 + this.rng.next() * 15;
+      this.buildTimer = 12 + this.rng.next() * 15;
       this._tryBuild();
     }
 
-    // Assign jobs only occasionally. Reassigning every frame makes job icons flash
-    // and cancels useful behaviour before villagers can move anywhere.
     this.jobTimer -= dt;
     if (this.jobTimer <= 0) {
       this.jobTimer = 12;
@@ -205,52 +202,35 @@ class Civilization {
   _assignJobs() {
     const adults = this.villagers.filter(v => !v.dead && !v.isBaby);
     const babies = this.villagers.filter(v => !v.dead && v.isBaby);
-
     for (const baby of babies) baby.assignJob('BABY');
 
     const pop = adults.length;
     if (pop === 0) return;
 
-    // Early economies need farmers, not huge standing armies.
-    const soldierRatio = this.warTarget ? 0.16 : 0.04;
+    const jobs = [];
+    const soldierRatio = this.warTarget ? 0.26 : 0.06;
+    const soldiers = Math.floor(pop * soldierRatio);
+    const farmers = Math.max(1, Math.floor(pop * 0.42));
+    const woodcut = Math.max(1, Math.floor(pop * 0.22));
+    const miners = Math.max(0, Math.floor(pop * 0.12));
 
-    const required = {
-      SOLDIER: Math.floor(pop * soldierRatio),
-      FARMER:  Math.max(1, Math.floor(pop * 0.42)),
-      WOODCUT: Math.max(1, Math.floor(pop * 0.22)),
-      MINER:   Math.max(0, Math.floor(pop * 0.12)),
-      IDLE:    0
-    };
-
-    const usedSlots = Object.values(required).reduce((a, b) => a + b, 0);
-    required.IDLE = Math.max(0, pop - usedSlots);
-
-    const kept = { SOLDIER: 0, FARMER: 0, WOODCUT: 0, MINER: 0, IDLE: 0 };
-    const unassigned = [];
-
-    // First pass: keep existing jobs when possible, so icons do not constantly flash.
-    for (const v of adults) {
-      const job = required[v.job] !== undefined ? v.job : 'IDLE';
-      if (kept[job] < required[job]) {
-        kept[job]++;
-        if (v.job !== job) v.assignJob(job);
-      } else {
-        unassigned.push(v);
-      }
+    for (let i = 0; i < pop; i++) {
+      if (i < soldiers) jobs.push('SOLDIER');
+      else if (i < soldiers + farmers) jobs.push('FARMER');
+      else if (i < soldiers + farmers + woodcut) jobs.push('WOODCUT');
+      else if (i < soldiers + farmers + woodcut + miners) jobs.push('MINER');
+      else jobs.push('IDLE');
     }
 
-    // Second pass: fill missing job slots.
-    const jobOrder = ['FARMER', 'WOODCUT', 'MINER', 'SOLDIER', 'IDLE'];
-    for (const job of jobOrder) {
-      while (kept[job] < required[job] && unassigned.length > 0) {
-        const v = unassigned.shift();
-        v.assignJob(job);
-        kept[job]++;
-      }
+    for (let i = jobs.length - 1; i > 0; i--) {
+      const j = this.rng.int(0, i + 1);
+      [jobs[i], jobs[j]] = [jobs[j], jobs[i]];
     }
 
-    // Anything left becomes idle instead of being shuffled randomly every cycle.
-    for (const v of unassigned) v.assignJob('IDLE');
+    for (let i = 0; i < adults.length; i++) {
+      const job = jobs[i % jobs.length];
+      if (adults[i].job !== job) adults[i].assignJob(job);
+    }
   }
 
   _tryBuild() {
@@ -260,7 +240,6 @@ class Civilization {
     const cy = th.ty + Math.floor(th.def.height / 2);
     const res = this.resources;
 
-    // What to build?
     let toBuild = null;
     const pop = this.population;
     const houses = this.getBuildingCount('HOUSE');
@@ -268,19 +247,20 @@ class Civilization {
     const lumber = this.getBuildingCount('LUMBERCAMP');
     const mines = this.getBuildingCount('MINE');
     const barracks = this.getBuildingCount('BARRACKS');
+    const watchtowers = this.getBuildingCount('WATCHTOWER');
 
     if (pop > houses * 5 && res.wood >= 10) toBuild = 'HOUSE';
-    else if (farms < Math.floor(pop / 5) + 1 && res.wood >= 5) toBuild = 'FARM';
+    else if (farms < Math.floor(pop / 4) + 1 && res.wood >= 5) toBuild = 'FARM';
     else if (lumber === 0 && res.wood >= 15 && res.stone >= 5) toBuild = 'LUMBERCAMP';
     else if (mines === 0 && res.wood >= 10 && res.stone >= 20) toBuild = 'MINE';
-    else if (barracks < 1 && res.wood >= 20 && res.stone >= 20) toBuild = 'BARRACKS';
+    else if (barracks < 1 && pop >= 12 && res.wood >= 20 && res.stone >= 20) toBuild = 'BARRACKS';
+    else if (this.warTarget && watchtowers < 2 && res.wood >= 12 && res.stone >= 8) toBuild = 'WATCHTOWER';
 
     if (!toBuild) return;
     const def = DATA.BUILDINGS[toBuild];
     if (!def) return;
 
-    // Find empty spot
-    for (let r = 3; r < 25; r += 2) {
+    for (let r = 3; r < 28; r += 2) {
       const angle = this.rng.next() * Math.PI * 2;
       const tx = Math.round(cx + Math.cos(angle) * r);
       const ty = Math.round(cy + Math.sin(angle) * r);
@@ -291,6 +271,8 @@ class Civilization {
         res.wood -= def.costWood || 0;
         res.stone -= def.costStone || 0;
         this.stats.buildingsBuilt++;
+
+        this.world.addRoadLine(cx, cy, tx + def.width / 2, ty + def.height / 2);
         return;
       }
     }
@@ -299,43 +281,54 @@ class Civilization {
   _aiDecide(allCivs) {
     const pers = this.pers;
 
-    // Consider war
-    if (!this.warTarget && this.adultPopulation > 6 && this.rng.next() < pers.war * 0.08) {
-      const candidates = allCivs.filter(c => c !== this && !c.dead && this.relations[c.id] !== 'war');
+    if (!this.warTarget && this.adultPopulation > 10 && this.rng.next() < pers.war * 0.12) {
+      const candidates = allCivs
+        .filter(c => c !== this && !c.dead && this.relations[c.id] !== 'war' && c.adultPopulation > 0)
+        .sort((a, b) => {
+          const da = this._distToCiv(a);
+          const db = this._distToCiv(b);
+          return da - db;
+        });
       if (candidates.length > 0) {
-        const target = this.rng.pick(candidates);
+        const target = candidates.slice(0, Math.min(3, candidates.length))[this.rng.int(0, Math.min(2, candidates.length - 1))];
         this.declareWar(target);
       }
     }
 
-    // Consider peace
-    if (this.warTarget && this.rng.next() < 0.02) {
-      if (this.adultPopulation < 5 || this.resources.food < 10) {
+    if (this.warTarget && this.rng.next() < 0.018) {
+      if (this.adultPopulation < 7 || this.resources.food < 60 || this.rng.next() < 0.25) {
         this.makePeace(this.warTarget);
       }
     }
   }
 
+  _distToCiv(other) {
+    if (!this.townhall || !other.townhall) return Infinity;
+    const ax = this.townhall.tx, ay = this.townhall.ty;
+    const bx = other.townhall.tx, by = other.townhall.ty;
+    return Math.hypot(ax - bx, ay - by);
+  }
+
   declareWar(other) {
+    if (!other || other.dead) return;
     this.relations[other.id] = 'war';
     other.relations[this.id] = 'war';
     this.warTarget = other;
     other.warTarget = this;
-    this.world.addEvent(`⚔ ${this._eventName(this)} → ${this._eventName(other)}`, '#c84040', { overlay: false });
+    this.world.addEvent(`⚔ ${this.colorName()} → ${other.colorName()}`, '#c84040', { overlay: false });
+    this.jobTimer = 0;
+    other.jobTimer = 0;
   }
 
   makePeace(other) {
+    if (!other) return;
     this.relations[other.id] = 'neutral';
     other.relations[this.id] = 'neutral';
     if (this.warTarget === other) this.warTarget = null;
     if (other.warTarget === this) other.warTarget = null;
-    this.world.addEvent(`🕊 ${this._eventName(this)} + ${this._eventName(other)} make peace`, '#7ec850', { overlay: false });
-  }
-
-
-  _eventName(civ) {
-    const short = civ.name.split(' ').pop();
-    return `<span style="color:${civ.color}">■ ${short}</span>`;
+    this.world.addEvent(`🕊 ${this.colorName()} + ${other.colorName()} make peace.`, '#7ec850', { overlay: false });
+    this.jobTimer = 0;
+    other.jobTimer = 0;
   }
 
   getBuildingCount(type) {

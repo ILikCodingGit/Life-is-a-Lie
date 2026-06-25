@@ -1,10 +1,10 @@
 let _vid = 0;
 
 class Villager {
-  // New game clock: 1 real second = 1 in-game day.
-  // So 30 seconds = 1 in-game month.
+  // 1 sec = 1 hour
   static DAYS_PER_MONTH = 30;
-  static SECONDS_PER_MONTH = Villager.DAYS_PER_MONTH;
+  static HOURS_PER_DAY = 24;
+  static SECONDS_PER_MONTH = Villager.DAYS_PER_MONTH * Villager.HOURS_PER_DAY;
   static BABY_MATURE_MONTHS = 10;
 
   constructor(civ, world, rng, x, y, options = {}) {
@@ -35,7 +35,7 @@ class Villager {
 
     this.lifeExpectancy = 80 + rng.int(0, 40) + (this.genes.stamina - 1) * 8;
     this.fertile = !this.isBaby;
-    this.reproTimer = options.reproTimer ?? rng.int(20, 60);
+    this.reproTimer = options.reproTimer ?? rng.int(48, 144);
 
     this.job = this.isBaby ? 'BABY' : 'IDLE';
     this.state = this.isBaby ? 'GROW' : 'WANDER'; // GROW | WANDER | WORK | EAT | SLEEP | FLEE | FIGHT | GOTO
@@ -43,7 +43,7 @@ class Villager {
     this.home = null;
     this.dead = false;
 
-    this.speed = (1.7 + rng.next() * 0.8) * this.genes.speed;
+    this.speed = (1.2 + rng.next() * 0.6) * this.genes.speed;
     this.attackPower = Math.max(1, Math.round((5 + rng.int(0, 10)) * this.genes.strength));
     this.attackRange = 1.2;
     this.attackCooldown = 0;
@@ -51,6 +51,8 @@ class Villager {
     this.workTimer = 0;
     this.stateTimer = 0;
     this.wander_target = null;
+    this.onBoat = false;
+    this.boatCooldown = 0;
   }
 
   static clamp(v, lo, hi) {
@@ -134,7 +136,7 @@ class Villager {
   }
 
   canReproduce() {
-    return !this.dead && !this.isBaby && this.fertile && this.age >= 18 && this.age < 45 && this.health > 50 && this.hunger < 78 && this.energy > 20 && this.reproTimer <= 0;
+    return !this.dead && !this.isBaby && this.fertile && this.age >= 18 && this.age < 45 && this.health > 55 && this.hunger < 65 && this.energy > 25 && this.reproTimer <= 0;
   }
 
   assignJob(job) {
@@ -156,14 +158,15 @@ class Villager {
     }
 
     const fitness = Math.max(0.45, this.environmentFitness);
-    const hungerRate = (this.isBaby ? 0.08 : 0.18) * this.genes.metabolism / fitness;
-    const energyUse = (this.isBaby ? 0.08 : 0.18) / this.genes.stamina;
+    const hungerRate = (this.isBaby ? 0.14 : 0.22) * this.genes.metabolism / fitness;
+    const energyUse = (this.isBaby ? 0.12 : 0.28) / this.genes.stamina;
 
     this.hunger += dt * hungerRate;
     this.energy -= dt * energyUse;
     this.attackCooldown -= dt;
     this.stateTimer -= dt;
     this.reproTimer -= dt;
+    this.boatCooldown -= dt;
 
     // Natural death
     if (!this.isBaby && this.age > this.lifeExpectancy) {
@@ -195,7 +198,7 @@ class Villager {
         this.target = { x: this.x + dx / len * 8, y: this.y + dy / len * 8 };
       }
 
-      if (this.hunger > 75) this.state = 'EAT';
+      if (this.hunger > 55) this.state = 'EAT';
 
       if (this.state === 'FLEE') this._moveToTarget(dt);
       else if (this.state === 'EAT') this._doEat(dt);
@@ -234,9 +237,9 @@ class Villager {
       const partner = this.civ.findMate(this);
       if (partner) {
         this.civ.birthVillager(this, partner);
-        const delay = Math.round((30 + rng.int(0, 60)) / this.genes.fertility);
+        const delay = Math.round((80 + rng.int(0, 120)) / this.genes.fertility);
         this.reproTimer = delay;
-        partner.reproTimer = delay + rng.int(0, 30);
+        partner.reproTimer = delay + rng.int(0, 48);
       }
     }
   }
@@ -251,30 +254,36 @@ class Villager {
     this.health = Math.max(this.health, 80);
     this.job = 'IDLE';
     this.state = 'WANDER';
-    this.speed = (1.7 + rng.next() * 0.8) * this.genes.speed;
+    this.speed = (1.2 + rng.next() * 0.6) * this.genes.speed;
     this.attackPower = Math.max(1, Math.round((5 + rng.int(0, 10)) * this.genes.strength));
-    this.reproTimer = 20 + rng.int(0, 50);
+    this.reproTimer = 48 + rng.int(0, 96);
     this.civ.world.addEvent(`🌱 ${this.name} matured into an adult in ${this.civ.name}.`, this.civ.color, { overlay: false });
   }
 
   _decideState(rng) {
-    this.stateTimer = 0.6 + rng.next() * 1.4;
+    this.stateTimer = 0.2 + rng.next() * 1.2;
 
     if (this.hunger > 85) { this.state = 'EAT'; return; }
 
     if (this.job === 'SOLDIER') {
-      const enemy = this.civ.findNearestEnemy(this.x, this.y, 20);
+      const enemy = this.civ.findNearestEnemy(this.x, this.y, 40);
       if (enemy) {
         this.state = 'FIGHT';
         this.target = enemy;
       } else {
-        // Patrol around town hall
-        const th = this.civ.townhall;
-        if (th) {
-          const angle = rng.next() * Math.PI * 2;
-          this.wander_target = { x: th.tx + th.def.width / 2 + Math.cos(angle) * 6, y: th.ty + th.def.height / 2 + Math.sin(angle) * 6 };
-          this.state = 'GOTO';
-          this.target = this.wander_target;
+        const objective = this.civ.getWarObjective?.(this.x, this.y);
+        if (objective) {
+          this.state = 'FIGHT';
+          this.target = objective;
+        } else {
+          // Patrol around town hall
+          const th = this.civ.townhall;
+          if (th) {
+            const angle = rng.next() * Math.PI * 2;
+            this.wander_target = { x: th.tx + th.def.width / 2 + Math.cos(angle) * 8, y: th.ty + th.def.height / 2 + Math.sin(angle) * 8 };
+            this.state = 'GOTO';
+            this.target = this.wander_target;
+          }
         }
       }
       return;
@@ -308,29 +317,15 @@ class Villager {
   }
 
   _doEat(dt) {
-    if (this.hunger < 15) {
-      this.state = this.isBaby ? 'GROW' : 'WANDER';
-      return;
-    }
-
-    // Eat fast, then go back to doing useful things.
-    // If there is no food, do not stand in EAT forever.
-    const eatRate = this.isBaby ? 35 : 75;
-    const eat = Math.min(dt * eatRate, this.hunger - 10, this.civ.resources.food);
-
-    if (eat <= 0.001) {
-      this.state = this.isBaby ? 'GROW' : 'WANDER';
-      this.stateTimer = 1.0;
-      return;
-    }
-
+    if (this.hunger < 15) { this.state = this.isBaby ? 'GROW' : 'WANDER'; return; }
+    if (this.civ.resources.food <= 0) { this.state = this.isBaby ? 'GROW' : 'WANDER'; return; }
+    // Consume civ food stock quickly, so villagers do not stand eating forever.
+    const eatRate = this.isBaby ? 25 : 55;
+    const eat = Math.min(dt * eatRate, this.hunger, this.civ.resources.food);
     this.hunger -= eat;
     this.civ.resources.food -= eat;
-    if (this.civ.resources.food <= 0) this.civ.resources.food = 0;
-
-    if (this.hunger <= 15) {
-      this.state = this.isBaby ? 'GROW' : 'WANDER';
-    }
+    if (this.civ.resources.food <= 0) { this.civ.resources.food = 0; }
+    if (this.hunger <= 0) this.state = this.isBaby ? 'GROW' : 'WANDER';
   }
 
   _doWork(dt, rng) {
@@ -353,16 +348,39 @@ class Villager {
   }
 
   _doFight(dt, rng) {
-    if (!this.target || this.target.dead) {
-      this.target = this.civ.findNearestEnemy(this.x, this.y, 25);
+    if (!this.target || this.target.dead || this.target.hp <= 0) {
+      this.target = this.civ.findNearestEnemy(this.x, this.y, 40) || this.civ.getWarObjective?.(this.x, this.y);
       if (!this.target) { this.state = 'WANDER'; return; }
     }
-    const dist = this._dist(this.target);
-    if (dist > this.attackRange) {
-      this._moveTo(this.target.x, this.target.y, dt);
+
+    let tx = this.target.x;
+    let ty = this.target.y;
+    let isBuilding = false;
+
+    if (this.target.def) {
+      isBuilding = true;
+      tx = this.target.tx + this.target.def.width / 2;
+      ty = this.target.ty + this.target.def.height / 2;
+    }
+
+    const dist = Math.hypot(tx - this.x, ty - this.y);
+    const range = isBuilding ? this.attackRange + 1.6 : this.attackRange;
+
+    if (dist > range) {
+      this._moveTo(tx, ty, dt, 1.15);
     } else if (this.attackCooldown <= 0) {
-      this.target.takeDamage(this.attackPower);
-      this.attackCooldown = 1.5 / this.genes.strength;
+      if (isBuilding) {
+        this.target.hp -= this.attackPower;
+        if (typeof Renderer !== 'undefined') Renderer.addEffect(tx, ty, '#ff8844', 0.4);
+        if (this.target.hp <= 0 && typeof Combat !== 'undefined') {
+          Combat.destroyBuilding(this.world, Game.civs, this.target);
+          this.target = null;
+        }
+      } else {
+        this.target.takeDamage(this.attackPower);
+        if (typeof Renderer !== 'undefined') Renderer.addEffect(this.target.x, this.target.y, '#ff4444', 0.35);
+      }
+      this.attackCooldown = 1.2 / this.genes.strength;
     }
   }
 
@@ -387,20 +405,47 @@ class Villager {
 
     const terr = this.world.tileAt(Math.floor(this.x), Math.floor(this.y));
     const affinity = this._terrainAffinity(terr);
-    const speed = this.speed * affinity * speedMult / (terr.moveCost || 1);
+    const roadBonus = this.world.hasRoad?.(Math.floor(this.x), Math.floor(this.y)) ? 1.55 : 1;
+    let speed = this.speed * affinity * speedMult * roadBonus / (terr.moveCost || 1);
+
+    if (this.onBoat) speed *= 0.75;
+
     const move = Math.min(speed * dt, dist);
     const nx = this.x + (dx / dist) * move;
     const ny = this.y + (dy / dist) * move;
 
     const ntx = Math.floor(nx), nty = Math.floor(ny);
+
     if (this.world.isPassable(ntx, nty)) {
       this.x = Math.max(0, Math.min(this.world.size - 0.01, nx));
       this.y = Math.max(0, Math.min(this.world.size - 0.01, ny));
-    } else {
-      this.wander_target = null;
-      this.target = null;
-      if (this.state === 'GOTO') this.state = 'WANDER';
+      this.onBoat = false;
+      return;
     }
+
+    if (this.world.isWater?.(ntx, nty) && this._shouldUseBoat(tx, ty)) {
+      if (!this.onBoat && this.boatCooldown <= 0) {
+        if (this.civ.resources.wood >= 1) this.civ.resources.wood -= 1;
+        this.boatCooldown = 180;
+      }
+      this.onBoat = true;
+      this.x = Math.max(0, Math.min(this.world.size - 0.01, nx));
+      this.y = Math.max(0, Math.min(this.world.size - 0.01, ny));
+      return;
+    }
+
+    this.wander_target = null;
+    this.target = null;
+    this.onBoat = false;
+    if (this.state === 'GOTO' || this.state === 'FIGHT') this.state = 'WANDER';
+  }
+
+  _shouldUseBoat(tx, ty) {
+    if (this.isBaby) return false;
+    if (this.onBoat) return true;
+    if (this.job === 'SOLDIER' && this.civ.warTarget) return true;
+    if (!this.target) return false;
+    return Math.hypot(tx - this.x, ty - this.y) > 7;
   }
 
   _dist(other) { return Math.hypot(other.x - this.x, other.y - this.y); }

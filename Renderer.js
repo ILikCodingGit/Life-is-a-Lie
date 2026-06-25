@@ -78,15 +78,9 @@ const Renderer = {
     if (!Game.world) return;
 
     const worldPx = Game.world.size * Game.world.tileSize;
-    const viewW = this.canvas.width / this.cam.zoom;
-    const viewH = this.canvas.height / this.cam.zoom;
-
-    // Allow the camera to pan a bit past the map edges. This keeps the map from
-    // being hard-glued to the left/top/right of the screen when zoomed out.
-    const margin = Math.max(viewW, viewH) * 0.45;
-
-    const maxX = Math.max(-margin, worldPx - viewW + margin);
-    const maxY = Math.max(-margin, worldPx - viewH + margin);
+    const margin = Math.max(this.canvas.width, this.canvas.height) / this.cam.zoom * 0.35;
+    const maxX = Math.max(0, worldPx - this.canvas.width / this.cam.zoom) + margin;
+    const maxY = Math.max(0, worldPx - this.canvas.height / this.cam.zoom) + margin;
 
     this.cam.x = Math.max(-margin, Math.min(maxX, this.cam.x));
     this.cam.y = Math.max(-margin, Math.min(maxY, this.cam.y));
@@ -190,6 +184,15 @@ const Renderer = {
           ctx.fillStyle = "rgba(0,0,0,0.2)";
           ctx.fillRect(px + TS * 0.4, py + TS * 0.4, 2, 2);
         }
+      }
+    }
+
+    // Roads
+    if (world.roads && world.roads.size) {
+      ctx.fillStyle = "rgba(122, 92, 52, 0.85)";
+      for (const key of world.roads) {
+        const [rx, ry] = key.split(',').map(Number);
+        ctx.fillRect(rx * TS + TS * 0.25, ry * TS + TS * 0.25, TS * 0.5, TS * 0.5);
       }
     }
 
@@ -311,6 +314,13 @@ const Renderer = {
         const vx = v.x * TS;
         const vy = v.y * TS + bob;
 
+        if (v.onBoat) {
+          ctx.fillStyle = "rgba(95, 58, 28, 0.95)";
+          ctx.fillRect(vx - vr * 1.8, vy + vr * 0.15, vr * 3.6, vr * 1.25);
+          ctx.fillStyle = "rgba(230, 225, 170, 0.9)";
+          ctx.fillRect(vx - vr * 0.25, vy - vr * 1.5, vr * 0.5, vr * 1.6);
+        }
+
         ctx.fillStyle = "rgba(0,0,0,0.25)";
         ctx.beginPath();
         ctx.arc(vx + 1, vy + 1, vr, 0, Math.PI * 2);
@@ -377,7 +387,10 @@ const Renderer = {
   },
 
   _drawDayNightOverlay(ctx, world) {
-    const hour = world.dayTime ?? 12;
+    // Avoid rapid flashing at high speeds. 10x+ disables the night overlay completely.
+    if (typeof Game !== 'undefined' && Game.speed >= 10) return;
+
+    const hour = ((world.dayTime ?? 12) + (typeof Game !== 'undefined' ? Game.tickAccum : 0)) % 24;
 
     let darkness = 0;
 

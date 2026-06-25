@@ -59,7 +59,6 @@ const Game = {
       Renderer.centerOn((th.tx + 1.5) * this.world.tileSize, (th.ty + 1.5) * this.world.tileSize);
     }
 
-    this.tickAccum = 0;
     Renderer.tileCacheDirty = true;
     UI.updateCivBadges();
     UI.updateDate();
@@ -104,18 +103,36 @@ const Game = {
     this.world.tick++;
     this.tickAccum += dt;
 
-    // New clock: 1 real second = 1 in-game day at 1x speed.
-    // The fractional part of tickAccum becomes the hour of the current day,
-    // so day/night still works instead of being stuck at 08:00 forever.
-    this.world.dayTime = Math.floor((this.tickAccum % 1) * 24);
+    // 1sec = 1 hour
 
-    while (this.tickAccum >= 1) {
-      this.tickAccum -= 1;
-      this._advanceOneDay();
-      this.world.dayTime = Math.floor((this.tickAccum % 1) * 24);
+    while (this.tickAccum >= 1)
+    {
+        this.tickAccum -= 1;
+
+        this.world.dayTime++;
+
+        if (this.world.dayTime >= 24)
+        {
+            this.world.dayTime = 0;
+            this.world.day++;
+
+            if (this.world.day > 30)
+            {
+                this.world.day = 1;
+                this.world.month++;
+
+                if (this.world.month > 12)
+                {
+                    this.world.month = 1;
+                    this.world.year++;
+
+                    this._yearlyEvents();
+                }
+            }
+        }
+
+        UI.updateDate();
     }
-
-    UI.updateDate();
     // Update civilizations
     for (const civ of this.civs) {
       civ.update(dt, this.civs);
@@ -128,22 +145,6 @@ const Game = {
     if (this.world.tick % 30 === 0) {
       UI.updateCivBadges();
       if (UI.selected) UI.updateSidebar();
-    }
-  },
-
-
-  _advanceOneDay() {
-    this.world.day++;
-
-    if (this.world.day > 30) {
-      this.world.day = 1;
-      this.world.month++;
-
-      if (this.world.month > 12) {
-        this.world.month = 1;
-        this.world.year++;
-        this._yearlyEvents();
-      }
     }
   },
 

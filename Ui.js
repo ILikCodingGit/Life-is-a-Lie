@@ -27,9 +27,10 @@ const UI = {
       document.getElementById('btn-pause').textContent = Game.paused ? '▶' : '⏸';
     });
 
-    document.getElementById('btn-speed1').addEventListener('click', () => this.setSpeed(1));
-    document.getElementById('btn-speed2').addEventListener('click', () => this.setSpeed(2));
-    document.getElementById('btn-speed4').addEventListener('click', () => this.setSpeed(4));
+    for (const speed of [1, 2, 4, 10, 25, 100]) {
+      const btn = document.getElementById(`btn-speed${speed}`);
+      if (btn) btn.addEventListener('click', () => this.setSpeed(speed));
+    }
     document.getElementById('btn-menu').addEventListener('click', () => {
       document.getElementById('screen-game').classList.remove('active');
       document.getElementById('screen-menu').classList.add('active');
@@ -41,8 +42,12 @@ const UI = {
 
   setSpeed(s) {
     Game.speed = s;
-    ['btn-speed1', 'btn-speed2', 'btn-speed4'].forEach(id => document.getElementById(id).classList.remove('active'));
-    document.getElementById(`btn-speed${s}`).classList.add('active');
+    for (const speed of [1, 2, 4, 10, 25, 100]) {
+      const btn = document.getElementById(`btn-speed${speed}`);
+      if (btn) btn.classList.remove('active');
+    }
+    const active = document.getElementById(`btn-speed${s}`);
+    if (active) active.classList.add('active');
   },
 
   startGame() {

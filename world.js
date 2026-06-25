@@ -7,6 +7,7 @@ class World {
     this.tiles = null;
     this.resources = [];  // { x, y, type, amount }
     this.buildings = [];
+    this.roads = new Set(); // tile keys like "x,y
     this.day = 1;
     this.month = 1;
     this.year = 1;
@@ -87,6 +88,43 @@ class World {
 
   isPassable(tx, ty) {
     return this.tileAt(tx, ty).passable;
+  }
+
+  isWater(tx, ty) {
+    const t = this.tileAt(tx, ty);
+    return t.id === DATA.TERRAIN.WATER.id || t.id === DATA.TERRAIN.DEEP_WATER.id;
+  }
+
+  roadKey(tx, ty) {
+    return `${tx},${ty}`;
+  }
+
+  hasRoad(tx, ty) {
+    return this.roads.has(this.roadKey(Math.floor(tx), Math.floor(ty)));
+  }
+
+  addRoad(tx, ty) {
+    tx = Math.floor(tx);
+    ty = Math.floor(ty);
+    if (tx < 0 || ty < 0 || tx >= this.size || ty >= this.size) return false;
+    if (!this.isPassable(tx, ty)) return false;
+    this.roads.add(this.roadKey(tx, ty));
+    if (typeof Renderer !== 'undefined') Renderer.tileCacheDirty = true;
+    return true;
+  }
+
+  addRoadLine(x1, y1, x2, y2) {
+    x1 = Math.floor(x1); y1 = Math.floor(y1);
+    x2 = Math.floor(x2); y2 = Math.floor(y2);
+    const steps = Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1), 1);
+    let built = 0;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const x = Math.round(x1 + (x2 - x1) * t);
+      const y = Math.round(y1 + (y2 - y1) * t);
+      if (this.addRoad(x, y)) built++;
+    }
+    return built;
   }
 
   findSpawnTile(hint_x, hint_y, radius) {
@@ -252,7 +290,7 @@ class World {
     if (this.events.length > 300) this.events.pop();
 
     // Browser dev console, plus the in-game console if it exists.
-    console.log(`[Y${this.year} M${this.month} D${this.day} ${String(this.dayTime).padStart(2, '0')}:00] ${String(msg).replace(/<[^>]*>/g, '')}`);
+    console.log(`[Y${this.year} M${this.month} D${this.day} ${String(this.dayTime).padStart(2, '0')}:00] ${msg}`);
     if (typeof UI !== 'undefined' && UI.addConsoleEvent) UI.addConsoleEvent(event);
   }
 }
