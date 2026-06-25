@@ -13,14 +13,14 @@ class Civilization {
     this.townhall = null;
     this.dead = false;
 
-    this.resources = { food: 1200, wood: 260, stone: 120, gold: 50, iron: 25 };
+    this.resources = { ...(DATA.ECONOMY?.startingResources || { food: 1200, wood: 260, stone: 120, gold: 50, iron: 25 }) };
     this.influence = 0;
     this.relations = {};  // civId -> 'neutral'|'ally'|'war'
 
     this.aiTimer = 0;
     this.buildTimer = 0;
     this.warTarget = null;
-    this.maxPopulation = 300;
+    this.maxPopulation = DATA.GAME?.maxPopulationPerCiv ?? 300;
     this.stats = { born: 0, matured: 0, died: 0, battlesWon: 0, buildingsBuilt: 0 };
     this.jobTimer = 0;
   }
@@ -88,7 +88,8 @@ class Civilization {
       const d = Math.hypot(other.x - v.x, other.y - v.y);
       if (d > 5) continue;
 
-      const score = other.health * 0.4 + (100 - other.hunger) * 0.2 + other.environmentFitness * 30 - d * 5;
+      const mate = DATA.REPRODUCTION?.partnerScore || {};
+      const score = other.health * (mate.health ?? 0.4) + (100 - other.hunger) * (mate.hunger ?? 0.2) + other.environmentFitness * (mate.envFitness ?? 30) - d * (mate.distancePenalty ?? 5);
       if (score > bestScore) { bestScore = score; best = other; }
     }
     return best;
@@ -171,9 +172,7 @@ class Civilization {
       if (wasBaby && !v.isBaby) this.stats.matured++;
     }
 
-    this.resources.food = Math.min(9999, this.resources.food + dt * 1.6 * (this.getBuildingCount('FARM') + 1));
-    this.resources.wood = Math.min(9999, this.resources.wood + dt * 0.45 * (this.getBuildingCount('LUMBERCAMP') + 1));
-    this.resources.stone = Math.min(9999, this.resources.stone + dt * 0.3 * (this.getBuildingCount('MINE') + 1));
+    this._applyBuildingProduction(dt);
 
     const foodPressure = this.adultPopulation + this.babyPopulation * 0.25;
     this.resources.food = Math.max(0, this.resources.food - dt * foodPressure * 0.018);
@@ -208,11 +207,12 @@ class Civilization {
     if (pop === 0) return;
 
     const jobs = [];
-    const soldierRatio = this.warTarget ? 0.26 : 0.06;
+    const jobCfg = DATA.AI?.jobs || {};
+    const soldierRatio = this.warTarget ? (jobCfg.soldierRatioWar ?? 0.26) : (jobCfg.soldierRatioPeace ?? 0.06);
     const soldiers = Math.floor(pop * soldierRatio);
-    const farmers = Math.max(1, Math.floor(pop * 0.42));
-    const woodcut = Math.max(1, Math.floor(pop * 0.22));
-    const miners = Math.max(0, Math.floor(pop * 0.12));
+    const farmers = Math.max(1, Math.floor(pop * (jobCfg.farmerRatio ?? 0.42)));
+    const woodcut = Math.max(1, Math.floor(pop * (jobCfg.woodcutRatio ?? 0.22)));
+    const miners = Math.max(0, Math.floor(pop * (jobCfg.minerRatio ?? 0.12)));
 
     for (let i = 0; i < pop; i++) {
       if (i < soldiers) jobs.push('SOLDIER');
@@ -233,47 +233,104 @@ class Civilization {
     }
   }
 
+  _applyBuildingProduction(dt) {
+    // Base gathering so a brand-new civ can survive before building everything.
+    this.resources.food = Math.min(9999, this.resources.food + dt * 0.8);
+    this.resources.wood = Math.min(9999, this.resources.wood + dt * 0.25);
+    this.resources.stone = Math.min(9999, this.resources.stone + dt * 0.15);
+
+    for (const b of this.buildings) {
+      if (!b || b.hp <= 0 || !b.def?.produces) continue;
+      for (const [resName, amount] of Object.entries(b.def.produces)) {
+        this.resources[resName] = Math.min(9999, (this.resources[resName] || 0) + dt * amount);
+      }
+    }
+  }
+
+  _housingCapacity() {
+    return this.buildings.reduce((sum, b) => sum + (b.hp > 0 ? (b.def.maxPop || 0) : 0), 0);
+  }
+
+  _hasBuilding(id) {
+    return this.getBuildingCount(id) > 0;
+  }
+
+  _hasTag(tag) {
+    return this.buildings.some(b => b.hp > 0 && (b.def.tags || []).includes(tag));
+  }
+
+  _buildRulePasses(plan, def) {
+    const rule = plan.when || {};
+    const pop = this.population;
+
+    if (rule.minPop !== undefined && pop < rule.minPop) return false;
+    if (rule.maxCount !== undefined && this.getBuildingCount(def.id) >= rule.maxCount) return false;
+    if (rule.atWar && !this.warTarget) return false;
+    if (rule.hasBuilding && !this._hasBuilding(rule.hasBuilding)) return false;
+    if (rule.nearWater && !this.world.isNearWater(this.townhall.tx, this.townhall.ty, 10)) return false;
+
+    if (rule.housingPressure) {
+      const cap = this._housingCapacity();
+      if (pop <= cap - 4) return false;
+    }
+
+    if (rule.farmsPerPop !== undefined) {
+      const farmsNeeded = Math.floor(pop * rule.farmsPerPop) + 1;
+      if (this.getBuildingCount(def.id) >= farmsNeeded) return false;
+    }
+
+    return true;
+  }
+
+  _chooseBuildingToBuild() {
+    const plans = (DATA.AI_BUILD_PLAN || [])
+      .map(plan => ({ plan, def: DATA.BUILDINGS[plan.building] }))
+      .filter(x => x.def && canAfford(this.resources, dataCost(x.def)) && this._buildRulePasses(x.plan, x.def))
+      .sort((a, b) => (b.plan.priority || 0) - (a.plan.priority || 0));
+
+    return plans.length ? plans[0].def : null;
+  }
+
   _tryBuild() {
     if (!this.townhall) return;
     const th = this.townhall;
     const cx = th.tx + Math.floor(th.def.width / 2);
     const cy = th.ty + Math.floor(th.def.height / 2);
-    const res = this.resources;
 
-    let toBuild = null;
-    const pop = this.population;
-    const houses = this.getBuildingCount('HOUSE');
-    const farms = this.getBuildingCount('FARM');
-    const lumber = this.getBuildingCount('LUMBERCAMP');
-    const mines = this.getBuildingCount('MINE');
-    const barracks = this.getBuildingCount('BARRACKS');
-    const watchtowers = this.getBuildingCount('WATCHTOWER');
-
-    if (pop > houses * 5 && res.wood >= 10) toBuild = 'HOUSE';
-    else if (farms < Math.floor(pop / 4) + 1 && res.wood >= 5) toBuild = 'FARM';
-    else if (lumber === 0 && res.wood >= 15 && res.stone >= 5) toBuild = 'LUMBERCAMP';
-    else if (mines === 0 && res.wood >= 10 && res.stone >= 20) toBuild = 'MINE';
-    else if (barracks < 1 && pop >= 12 && res.wood >= 20 && res.stone >= 20) toBuild = 'BARRACKS';
-    else if (this.warTarget && watchtowers < 2 && res.wood >= 12 && res.stone >= 8) toBuild = 'WATCHTOWER';
-
-    if (!toBuild) return;
-    const def = DATA.BUILDINGS[toBuild];
+    const def = this._chooseBuildingToBuild();
     if (!def) return;
 
-    for (let r = 3; r < 28; r += 2) {
-      const angle = this.rng.next() * Math.PI * 2;
-      const tx = Math.round(cx + Math.cos(angle) * r);
-      const ty = Math.round(cy + Math.sin(angle) * r);
-      if (this.world.isBuildable(tx, ty, def.width, def.height)) {
-        const b = new Building(def, tx, ty, this);
-        this.world.addBuilding(b);
-        this.buildings.push(b);
-        res.wood -= def.costWood || 0;
-        res.stone -= def.costStone || 0;
-        this.stats.buildingsBuilt++;
+    const radiusStart = def.category === 'defense' ? 4 : 3;
+    const radiusEnd = def.category === 'defense' ? 12 : 32;
 
-        this.world.addRoadLine(cx, cy, tx + def.width / 2, ty + def.height / 2);
-        return;
+    for (let r = radiusStart; r < radiusEnd; r += 2) {
+      const attempts = DATA.AI?.building?.attemptsPerRadius ?? 8;
+      for (let attempt = 0; attempt < attempts; attempt++) {
+        const angle = this.rng.next() * Math.PI * 2;
+        let tx = Math.round(cx + Math.cos(angle) * r);
+        let ty = Math.round(cy + Math.sin(angle) * r);
+
+        // Naval buildings prefer coastlines.
+        if (def.category === 'naval') {
+          if (!this.world.isNearWater(tx, ty, 2)) continue;
+        }
+
+        if (this.world.isBuildable(tx, ty, def.width, def.height)) {
+          const b = new Building(def, tx, ty, this);
+          this.world.addBuilding(b);
+          this.buildings.push(b);
+          payCost(this.resources, dataCost(def));
+          this.stats.buildingsBuilt++;
+
+          if (def.roadConnect !== false) {
+            this.world.addRoadLine(cx, cy, tx + def.width / 2, ty + def.height / 2);
+          }
+
+          if (def.category === 'defense' && this.warTarget) {
+            this.world.addEvent(`🧱 ${this.colorName()} builds ${def.name}.`, this.color, { overlay: false });
+          }
+          return;
+        }
       }
     }
   }
@@ -333,6 +390,10 @@ class Civilization {
 
   getBuildingCount(type) {
     return this.buildings.filter(b => b.def.id === type && b.hp > 0).length;
+  }
+
+  getBuildingsByTag(tag) {
+    return this.buildings.filter(b => b.hp > 0 && (b.def.tags || []).includes(tag));
   }
 
   placeInitialBuildings(cx, cy) {

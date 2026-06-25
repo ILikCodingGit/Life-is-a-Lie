@@ -1,11 +1,11 @@
 let _vid = 0;
 
 class Villager {
-  // 1 sec = 1 hour
-  static DAYS_PER_MONTH = 30;
-  static HOURS_PER_DAY = 24;
-  static SECONDS_PER_MONTH = Villager.DAYS_PER_MONTH * Villager.HOURS_PER_DAY;
-  static BABY_MATURE_MONTHS = 10;
+  // Timing lives in data.json.
+  static get DAYS_PER_MONTH() { return DATA.TIME?.daysPerMonth ?? 30; }
+  static get HOURS_PER_DAY() { return DATA.TIME?.hoursPerDay ?? 24; }
+  static get SECONDS_PER_MONTH() { return (DATA.TIME?.secondsPerHour ?? 1) * Villager.HOURS_PER_DAY * Villager.DAYS_PER_MONTH; }
+  static get BABY_MATURE_MONTHS() { return DATA.VILLAGER?.babyMatureMonths ?? 10; }
 
   constructor(civ, world, rng, x, y, options = {}) {
     this.id = ++_vid;
@@ -21,21 +21,26 @@ class Villager {
     this.parents = options.parents || null;
 
     this.isBaby = !!options.isBaby;
-    this.monthAge = options.monthAge ?? (this.isBaby ? 0 : rng.int(16 * 12, 35 * 12));
+    this.monthAge = options.monthAge ?? (this.isBaby ? 0 : rng.int(DATA.VILLAGER?.adultStartAgeMonths?.min ?? 216, DATA.VILLAGER?.adultStartAgeMonths?.max ?? 420));
     this.matureMonths = options.matureMonths || Villager.BABY_MATURE_MONTHS;
 
     // Needs (0-100)
-    this.health = this.isBaby ? 55 + rng.next() * 25 : 80 + rng.next() * 20;
-    this.maxHealth = this.isBaby ? 70 : 100;
-    this.hunger = this.isBaby ? 30 + rng.next() * 20 : 20 + rng.next() * 30;
-    this.energy = this.isBaby ? 65 + rng.next() * 30 : 60 + rng.next() * 40;
+    const hp0 = DATA.VILLAGER?.initialHealth || {};
+    this.health = this.isBaby ? (hp0.babyMin ?? 55) + rng.next() * (hp0.babyRandom ?? 25) : (hp0.adultMin ?? 80) + rng.next() * (hp0.adultRandom ?? 20);
+    this.maxHealth = this.isBaby ? (DATA.VILLAGER?.maxHealth?.baby ?? 70) : (DATA.VILLAGER?.maxHealth?.adult ?? 100);
+    const h0 = DATA.VILLAGER?.initialHunger || {};
+    this.hunger = this.isBaby ? (h0.babyMin ?? 30) + rng.next() * (h0.babyRandom ?? 20) : (h0.adultMin ?? 20) + rng.next() * (h0.adultRandom ?? 30);
+    const e0 = DATA.VILLAGER?.initialEnergy || {};
+    this.energy = this.isBaby ? (e0.babyMin ?? 65) + rng.next() * (e0.babyRandom ?? 30) : (e0.adultMin ?? 60) + rng.next() * (e0.adultRandom ?? 40);
 
     this.age = this.monthAge / 12;
     if (!this.isBaby && options.age !== undefined) this.age = options.age;
 
-    this.lifeExpectancy = 80 + rng.int(0, 40) + (this.genes.stamina - 1) * 8;
+    const life = DATA.VILLAGER?.lifeExpectancy || {};
+    this.lifeExpectancy = (life.base ?? 80) + rng.int(0, life.random ?? 40) + (this.genes.stamina - 1) * (life.staminaBonus ?? 8);
     this.fertile = !this.isBaby;
-    this.reproTimer = options.reproTimer ?? rng.int(48, 144);
+    const repro0 = DATA.REPRODUCTION?.initialCooldownHours || {};
+    this.reproTimer = options.reproTimer ?? rng.int(repro0.min ?? 48, repro0.max ?? 144);
 
     this.job = this.isBaby ? 'BABY' : 'IDLE';
     this.state = this.isBaby ? 'GROW' : 'WANDER'; // GROW | WANDER | WORK | EAT | SLEEP | FLEE | FIGHT | GOTO
@@ -43,9 +48,9 @@ class Villager {
     this.home = null;
     this.dead = false;
 
-    this.speed = (1.2 + rng.next() * 0.6) * this.genes.speed;
-    this.attackPower = Math.max(1, Math.round((5 + rng.int(0, 10)) * this.genes.strength));
-    this.attackRange = 1.2;
+    this.speed = ((DATA.MOVEMENT?.baseSpeed?.min ?? 1.2) + rng.next() * (DATA.MOVEMENT?.baseSpeed?.random ?? 0.6)) * this.genes.speed;
+    this.attackPower = Math.max(1, Math.round(((DATA.VILLAGER?.combat?.baseAttackMin ?? 5) + rng.int(0, DATA.VILLAGER?.combat?.baseAttackRandom ?? 10)) * this.genes.strength));
+    this.attackRange = DATA.VILLAGER?.combat?.attackRange ?? 1.2;
     this.attackCooldown = 0;
 
     this.workTimer = 0;
@@ -53,25 +58,28 @@ class Villager {
     this.wander_target = null;
     this.onBoat = false;
     this.boatCooldown = 0;
+    this.boatType = null;
+    this.boatDef = null;
   }
 
   static clamp(v, lo, hi) {
     return Math.max(lo, Math.min(hi, v));
   }
 
-  static mutate(value, rng, amount = 0.08) {
-    return Villager.clamp(value + (rng.next() * 2 - 1) * amount, 0.55, 1.55);
+  static mutate(value, rng, amount = (DATA.GENETICS?.mutationAmount ?? 0.08)) {
+    const c = DATA.GENETICS?.clamp || {};
+    return Villager.clamp(value + (rng.next() * 2 - 1) * amount, c.min ?? 0.55, c.max ?? 1.55);
   }
 
   static randomGenes(rng, world, x, y) {
     const ideal = world?.getGeneIdealAt?.(x, y) || null;
     const base = {
-      speed: 0.9 + rng.next() * 0.25,
-      stamina: 0.9 + rng.next() * 0.25,
-      metabolism: 0.9 + rng.next() * 0.25,
-      strength: 0.9 + rng.next() * 0.25,
-      fertility: 0.9 + rng.next() * 0.25,
-      workRate: 0.9 + rng.next() * 0.25,
+      speed: (DATA.GENETICS?.traitBase?.min ?? 0.9) + rng.next() * (DATA.GENETICS?.traitBase?.random ?? 0.25),
+      stamina: (DATA.GENETICS?.traitBase?.min ?? 0.9) + rng.next() * (DATA.GENETICS?.traitBase?.random ?? 0.25),
+      metabolism: (DATA.GENETICS?.traitBase?.min ?? 0.9) + rng.next() * (DATA.GENETICS?.traitBase?.random ?? 0.25),
+      strength: (DATA.GENETICS?.traitBase?.min ?? 0.9) + rng.next() * (DATA.GENETICS?.traitBase?.random ?? 0.25),
+      fertility: (DATA.GENETICS?.traitBase?.min ?? 0.9) + rng.next() * (DATA.GENETICS?.traitBase?.random ?? 0.25),
+      workRate: (DATA.GENETICS?.traitBase?.min ?? 0.9) + rng.next() * (DATA.GENETICS?.traitBase?.random ?? 0.25),
       terrain: {
         forest: 1,
         hills: 1,
@@ -85,10 +93,12 @@ class Villager {
     if (!ideal) return base;
 
     for (const key of ['speed', 'stamina', 'metabolism', 'strength', 'fertility', 'workRate']) {
-      base[key] = Villager.clamp(base[key] * 0.75 + ideal[key] * 0.25, 0.55, 1.55);
+      const blend = DATA.GENETICS?.randomGeneEnvBlend || {};
+      base[key] = Villager.clamp(base[key] * (blend.base ?? 0.75) + ideal[key] * (blend.ideal ?? 0.25), DATA.GENETICS?.clamp?.min ?? 0.55, DATA.GENETICS?.clamp?.max ?? 1.55);
     }
     for (const key of Object.keys(base.terrain)) {
-      base.terrain[key] = Villager.clamp(base.terrain[key] * 0.75 + (ideal.terrain[key] || 1) * 0.25, 0.55, 1.55);
+      const blend = DATA.GENETICS?.randomGeneEnvBlend || {};
+      base.terrain[key] = Villager.clamp(base.terrain[key] * (blend.base ?? 0.75) + (ideal.terrain[key] || 1) * (blend.ideal ?? 0.25), DATA.GENETICS?.clamp?.min ?? 0.55, DATA.GENETICS?.clamp?.max ?? 1.55);
     }
     return base;
   }
@@ -109,14 +119,16 @@ class Villager {
     for (const key of ['speed', 'stamina', 'metabolism', 'strength', 'fertility', 'workRate']) {
       const inherited = parentA.genes[key] * wa + parentB.genes[key] * wb;
       const envBias = ideal[key] ?? 1;
-      child[key] = Villager.mutate(inherited * 0.82 + envBias * 0.18, rng, 0.06);
+      const ib = DATA.GENETICS?.inheritBlend || {};
+      child[key] = Villager.mutate(inherited * (ib.inherited ?? 0.82) + envBias * (ib.environment ?? 0.18), rng, ib.mutation ?? 0.06);
     }
 
     const terrains = ['forest', 'hills', 'desert', 'snow', 'swamp', 'grass'];
     for (const key of terrains) {
       const inherited = (parentA.genes.terrain?.[key] ?? 1) * wa + (parentB.genes.terrain?.[key] ?? 1) * wb;
       const envBias = ideal.terrain?.[key] ?? 1;
-      child.terrain[key] = Villager.mutate(inherited * 0.78 + envBias * 0.22, rng, 0.07);
+      const ib = DATA.GENETICS?.inheritBlend || {};
+      child.terrain[key] = Villager.mutate(inherited * (ib.terrainInherited ?? 0.78) + envBias * (ib.terrainEnvironment ?? 0.22), rng, ib.terrainMutation ?? 0.07);
     }
 
     return child;
@@ -136,7 +148,8 @@ class Villager {
   }
 
   canReproduce() {
-    return !this.dead && !this.isBaby && this.fertile && this.age >= 18 && this.age < 45 && this.health > 55 && this.hunger < 65 && this.energy > 25 && this.reproTimer <= 0;
+    const r = DATA.REPRODUCTION?.requirements || {};
+    return !this.dead && !this.isBaby && this.fertile && this.age >= (r.minAge ?? 18) && this.age < (r.maxAge ?? 45) && this.health > (r.minHealth ?? 55) && this.hunger < (r.maxHunger ?? 65) && this.energy > (r.minEnergy ?? 25) && this.reproTimer <= 0;
   }
 
   assignJob(job) {
@@ -157,9 +170,11 @@ class Villager {
       this.mature(rng);
     }
 
-    const fitness = Math.max(0.45, this.environmentFitness);
-    const hungerRate = (this.isBaby ? 0.14 : 0.22) * this.genes.metabolism / fitness;
-    const energyUse = (this.isBaby ? 0.12 : 0.28) / this.genes.stamina;
+    const hungerCfg = DATA.VILLAGER?.hungerRate || {};
+    const energyCfg = DATA.VILLAGER?.energy || {};
+    const fitness = Math.max(hungerCfg.minFitness ?? 0.45, this.environmentFitness);
+    const hungerRate = (this.isBaby ? (hungerCfg.baby ?? 0.14) : (hungerCfg.adult ?? 0.22)) * this.genes.metabolism / fitness;
+    const energyUse = (this.isBaby ? (energyCfg.babyUse ?? 0.12) : (energyCfg.adultUse ?? 0.28)) / this.genes.stamina;
 
     this.hunger += dt * hungerRate;
     this.energy -= dt * energyUse;
@@ -170,35 +185,35 @@ class Villager {
 
     // Natural death
     if (!this.isBaby && this.age > this.lifeExpectancy) {
-      const deathChance = (this.age - this.lifeExpectancy) * dt * 0.01;
+      const deathChance = (this.age - this.lifeExpectancy) * dt * (DATA.VILLAGER?.lifeExpectancy?.oldAgeDeathRate ?? 0.01);
       if (rng.next() < deathChance) { this.die('old age'); return; }
     }
 
-    if (this.hunger >= 100) { this.health -= dt * (this.isBaby ? 7 : 5); }
+    if (this.hunger >= (DATA.VILLAGER?.hungerRate?.starvationAt ?? 100)) { this.health -= dt * (this.isBaby ? (DATA.VILLAGER?.hungerRate?.babyStarveDamage ?? 7) : (DATA.VILLAGER?.hungerRate?.adultStarveDamage ?? 5)); }
     if (this.health <= 0) { this.die('starvation'); return; }
 
     // Energy sleep
-    if (this.energy < 10 && this.state !== 'SLEEP') {
+    if (this.energy < (energyCfg.sleepBelow ?? 10) && this.state !== 'SLEEP') {
       this.state = 'SLEEP';
-      this.stateTimer = 3 + rng.next() * 2;
+      this.stateTimer = (energyCfg.sleepTimerMin ?? 3) + rng.next() * (energyCfg.sleepTimerRandom ?? 2);
     }
     if (this.state === 'SLEEP') {
-      this.energy = Math.min(100, this.energy + dt * (this.isBaby ? 26 : 20));
-      if (this.energy >= 80) this.state = this.isBaby ? 'GROW' : 'WANDER';
+      this.energy = Math.min(100, this.energy + dt * (this.isBaby ? (energyCfg.babyRecover ?? 26) : (energyCfg.adultRecover ?? 20)));
+      if (this.energy >= (energyCfg.wakeAt ?? 80)) this.state = this.isBaby ? 'GROW' : 'WANDER';
       return;
     }
 
     // Babies grow, eat, wander near home, and flee
     if (this.isBaby) {
-      const threat = this.civ.findNearestEnemy(this.x, this.y, 8);
+      const threat = this.civ.findNearestEnemy(this.x, this.y, DATA.VILLAGER?.flee?.civilianRange ?? 8);
       if (threat) {
         this.state = 'FLEE';
         const dx = this.x - threat.x, dy = this.y - threat.y;
         const len = Math.hypot(dx, dy) || 1;
-        this.target = { x: this.x + dx / len * 8, y: this.y + dy / len * 8 };
+        this.target = { x: this.x + dx / len * (DATA.VILLAGER?.flee?.babyDist ?? 8), y: this.y + dy / len * (DATA.VILLAGER?.flee?.babyDist ?? 8) };
       }
 
-      if (this.hunger > 55) this.state = 'EAT';
+      if (this.hunger > (DATA.VILLAGER?.hungerRate?.babyEatThreshold ?? 55)) this.state = 'EAT';
 
       if (this.state === 'FLEE') this._moveToTarget(dt);
       else if (this.state === 'EAT') this._doEat(dt);
@@ -209,12 +224,12 @@ class Villager {
 
     // Flee from enemies
     if (this.job !== 'SOLDIER') {
-      const threat = this.civ.findNearestEnemy(this.x, this.y, 8);
+      const threat = this.civ.findNearestEnemy(this.x, this.y, DATA.VILLAGER?.flee?.civilianRange ?? 8);
       if (threat) {
         this.state = 'FLEE';
         const dx = this.x - threat.x, dy = this.y - threat.y;
         const len = Math.hypot(dx, dy) || 1;
-        this.target = { x: this.x + dx / len * 12, y: this.y + dy / len * 12 };
+        this.target = { x: this.x + dx / len * (DATA.VILLAGER?.flee?.civilianDist ?? 12), y: this.y + dy / len * (DATA.VILLAGER?.flee?.civilianDist ?? 12) };
       }
     }
 
@@ -237,9 +252,10 @@ class Villager {
       const partner = this.civ.findMate(this);
       if (partner) {
         this.civ.birthVillager(this, partner);
-        const delay = Math.round((80 + rng.int(0, 120)) / this.genes.fertility);
+        const rc = DATA.REPRODUCTION?.postBirthCooldownHours || {};
+        const delay = Math.round(((rc.base ?? 80) + rng.int(0, rc.random ?? 120)) / this.genes.fertility);
         this.reproTimer = delay;
-        partner.reproTimer = delay + rng.int(0, 48);
+        partner.reproTimer = delay + rng.int(0, rc.partnerExtraRandom ?? 48);
       }
     }
   }
@@ -250,20 +266,20 @@ class Villager {
     this.fertile = true;
     this.age = 18;
     this.monthAge = 18 * 12;
-    this.maxHealth = 100;
+    this.maxHealth = DATA.VILLAGER?.maxHealth?.adult ?? 100;
     this.health = Math.max(this.health, 80);
     this.job = 'IDLE';
     this.state = 'WANDER';
-    this.speed = (1.2 + rng.next() * 0.6) * this.genes.speed;
-    this.attackPower = Math.max(1, Math.round((5 + rng.int(0, 10)) * this.genes.strength));
-    this.reproTimer = 48 + rng.int(0, 96);
+    this.speed = ((DATA.MOVEMENT?.baseSpeed?.min ?? 1.2) + rng.next() * (DATA.MOVEMENT?.baseSpeed?.random ?? 0.6)) * this.genes.speed;
+    this.attackPower = Math.max(1, Math.round(((DATA.VILLAGER?.combat?.baseAttackMin ?? 5) + rng.int(0, DATA.VILLAGER?.combat?.baseAttackRandom ?? 10)) * this.genes.strength));
+    this.reproTimer = (DATA.REPRODUCTION?.initialCooldownHours?.min ?? 48) + rng.int(0, DATA.REPRODUCTION?.initialCooldownHours?.max ?? 144);
     this.civ.world.addEvent(`🌱 ${this.name} matured into an adult in ${this.civ.name}.`, this.civ.color, { overlay: false });
   }
 
   _decideState(rng) {
-    this.stateTimer = 0.2 + rng.next() * 1.2;
+    this.stateTimer = (DATA.VILLAGER?.stateDecision?.min ?? 0.2) + rng.next() * (DATA.VILLAGER?.stateDecision?.random ?? 1.2);
 
-    if (this.hunger > 85) { this.state = 'EAT'; return; }
+    if (this.hunger > (DATA.VILLAGER?.hungerRate?.adultEatThreshold ?? 85)) { this.state = 'EAT'; return; }
 
     if (this.job === 'SOLDIER') {
       const enemy = this.civ.findNearestEnemy(this.x, this.y, 40);
@@ -301,16 +317,16 @@ class Villager {
       const cx = th ? th.tx + th.def.width / 2 : this.x;
       const cy = th ? th.ty + th.def.height / 2 : this.y;
       const angle = rng.next() * Math.PI * 2;
-      const dist = 1.5 + rng.next() * 4;
+      const dist = (DATA.VILLAGER?.wander?.babyDistMin ?? 1.5) + rng.next() * (DATA.VILLAGER?.wander?.babyDistRandom ?? 4);
       this.wander_target = { x: cx + Math.cos(angle) * dist, y: cy + Math.sin(angle) * dist };
     }
-    this._moveTo(this.wander_target.x, this.wander_target.y, dt, 0.65);
+    this._moveTo(this.wander_target.x, this.wander_target.y, dt, DATA.VILLAGER?.wander?.babySpeedMult ?? 0.65);
   }
 
   _doWander(dt, rng) {
     if (!this.wander_target || this._dist(this.wander_target) < 0.5) {
       const angle = rng.next() * Math.PI * 2;
-      const dist = 2 + rng.next() * 5;
+      const dist = (DATA.VILLAGER?.wander?.adultDistMin ?? 2) + rng.next() * (DATA.VILLAGER?.wander?.adultDistRandom ?? 5);
       this.wander_target = { x: this.x + Math.cos(angle) * dist, y: this.y + Math.sin(angle) * dist };
     }
     this._moveTo(this.wander_target.x, this.wander_target.y, dt);
@@ -331,7 +347,7 @@ class Villager {
   _doWork(dt, rng) {
     this.workTimer -= dt;
     if (this.workTimer <= 0) {
-      this.workTimer = 3 + rng.next() * 2;
+      this.workTimer = (DATA.VILLAGER?.work?.timerMin ?? 3) + rng.next() * (DATA.VILLAGER?.work?.timerRandom ?? 2);
       const res = this.civ.resources;
       const rate = this.genes.workRate * Math.max(0.6, this.environmentFitness);
       if (this.job === 'FARMER')  res.food  = Math.min(9999, res.food  + 20 * rate);
@@ -370,7 +386,12 @@ class Villager {
       this._moveTo(tx, ty, dt, 1.15);
     } else if (this.attackCooldown <= 0) {
       if (isBuilding) {
-        this.target.hp -= this.attackPower;
+        const armor = this.target.armor ?? this.target.def?.armor ?? 0;
+        const mult = (this.target.def?.tags || []).includes('townhall') || (this.target.def?.tags || []).includes('wall')
+          ? (DATA.COMBAT?.wallTownHallDamageMultiplier || 0.55)
+          : 1;
+        const dmg = Math.max(DATA.COMBAT?.minBuildingDamage || 1, Math.floor((this.attackPower - armor) * mult));
+        this.target.hp -= dmg;
         if (typeof Renderer !== 'undefined') Renderer.addEffect(tx, ty, '#ff8844', 0.4);
         if (this.target.hp <= 0 && typeof Combat !== 'undefined') {
           Combat.destroyBuilding(this.world, Game.civs, this.target);
@@ -405,10 +426,10 @@ class Villager {
 
     const terr = this.world.tileAt(Math.floor(this.x), Math.floor(this.y));
     const affinity = this._terrainAffinity(terr);
-    const roadBonus = this.world.hasRoad?.(Math.floor(this.x), Math.floor(this.y)) ? 1.55 : 1;
+    const roadBonus = this.world.hasRoad?.(Math.floor(this.x), Math.floor(this.y)) ? (DATA.MOVEMENT?.roadSpeedBonus ?? DATA.ROAD?.speedBonus ?? 1.55) : 1;
     let speed = this.speed * affinity * speedMult * roadBonus / (terr.moveCost || 1);
 
-    if (this.onBoat) speed *= 0.75;
+    if (this.onBoat) speed *= (this.boatDef?.speedMult || 0.75);
 
     const move = Math.min(speed * dt, dist);
     const nx = this.x + (dx / dist) * move;
@@ -420,15 +441,31 @@ class Villager {
       this.x = Math.max(0, Math.min(this.world.size - 0.01, nx));
       this.y = Math.max(0, Math.min(this.world.size - 0.01, ny));
       this.onBoat = false;
+      this.boatType = null;
+      this.boatDef = null;
       return;
     }
 
     if (this.world.isWater?.(ntx, nty) && this._shouldUseBoat(tx, ty)) {
-      if (!this.onBoat && this.boatCooldown <= 0) {
-        if (this.civ.resources.wood >= 1) this.civ.resources.wood -= 1;
-        this.boatCooldown = 180;
+      const boat = this._getBoatDef(tx, ty);
+      if (!boat) {
+        this.wander_target = null;
+        this.target = null;
+        return;
       }
+
+      if (!this.onBoat && this.boatCooldown <= 0) {
+        payCost(this.civ.resources, dataCost(boat));
+        this.boatCooldown = boat.cooldownHours || DATA.MOVEMENT?.boat?.cooldownFallbackHours || 180;
+        this.boatType = boat.id;
+        this.boatDef = boat;
+      }
+
       this.onBoat = true;
+      if (!this.boatDef) {
+        this.boatDef = boat;
+        this.boatType = boat.id;
+      }
       this.x = Math.max(0, Math.min(this.world.size - 0.01, nx));
       this.y = Math.max(0, Math.min(this.world.size - 0.01, ny));
       return;
@@ -437,15 +474,27 @@ class Villager {
     this.wander_target = null;
     this.target = null;
     this.onBoat = false;
+    this.boatType = null;
+    this.boatDef = null;
     if (this.state === 'GOTO' || this.state === 'FIGHT') this.state = 'WANDER';
+  }
+
+  _getBoatDef(tx, ty) {
+    return this.world.getBestBoatFor?.(this.civ, this, tx, ty) || DATA.BOATS?.RAFT || null;
   }
 
   _shouldUseBoat(tx, ty) {
     if (this.isBaby) return false;
     if (this.onBoat) return true;
-    if (this.job === 'SOLDIER' && this.civ.warTarget) return true;
-    if (!this.target) return false;
-    return Math.hypot(tx - this.x, ty - this.y) > 7;
+    if (!this.target && !(this.job === 'SOLDIER' && this.civ.warTarget)) return false;
+
+    const boat = this._getBoatDef(tx, ty);
+    if (!boat) return false;
+    if (!canAfford(this.civ.resources, dataCost(boat))) return false;
+
+    const distance = Math.hypot(tx - this.x, ty - this.y);
+    if (this.job === 'SOLDIER' && this.civ.warTarget) return distance > (boat.minDistance || 4);
+    return distance > (boat.minDistance || 7);
   }
 
   _dist(other) { return Math.hypot(other.x - this.x, other.y - this.y); }

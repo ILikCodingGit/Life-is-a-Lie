@@ -55,7 +55,7 @@ const Game = {
     // Center camera on first civ
     if (this.civs.length > 0 && this.civs[0].townhall) {
       const th = this.civs[0].townhall;
-      Renderer.cam.zoom = 3;
+      Renderer.cam.zoom = DATA.RENDER?.initialZoom ?? 3;
       Renderer.centerOn((th.tx + 1.5) * this.world.tileSize, (th.ty + 1.5) * this.world.tileSize);
     }
 
@@ -67,11 +67,11 @@ const Game = {
 
   _spreadPositions(count, S, rng) {
     const positions = [];
-    const margin = Math.floor(S * 0.12);
+    const margin = Math.floor(S * (DATA.WORLD_GEN?.spawn?.marginRatio ?? 0.12));
     const inner  = S - margin * 2;
     for (let i = 0; i < count; i++) {
       let best = null, bestMinDist = 0;
-      for (let attempt = 0; attempt < 30; attempt++) {
+      for (let attempt = 0; attempt < (DATA.WORLD_GEN?.spawn?.attempts ?? 30); attempt++) {
         const cx = margin + rng.int(0, inner);
         const cy = margin + rng.int(0, inner);
         let minDist = Infinity;
@@ -86,7 +86,7 @@ const Game = {
   loop(now) {
     requestAnimationFrame(t => this.loop(t));
 
-    const rawDt = Math.min((now - this.lastTime) / 1000, 0.1);
+    const rawDt = Math.min((now - this.lastTime) / 1000, DATA.GAME?.maxFrameDt ?? 0.1);
     this.lastTime = now;
 
     if (!this.paused && this.world) {
@@ -103,35 +103,34 @@ const Game = {
     this.world.tick++;
     this.tickAccum += dt;
 
-    // 1sec = 1 hour
+    // Time is fully data-driven in data.json.
+    const time = DATA.TIME || {};
+    const secondsPerHour = time.secondsPerHour ?? 1;
+    const hoursPerDay = time.hoursPerDay ?? 24;
+    const daysPerMonth = time.daysPerMonth ?? 30;
+    const monthsPerYear = time.monthsPerYear ?? 12;
 
-    while (this.tickAccum >= 1)
-    {
-        this.tickAccum -= 1;
+    while (this.tickAccum >= secondsPerHour) {
+      this.tickAccum -= secondsPerHour;
+      this.world.dayTime++;
 
-        this.world.dayTime++;
+      if (this.world.dayTime >= hoursPerDay) {
+        this.world.dayTime = 0;
+        this.world.day++;
 
-        if (this.world.dayTime >= 24)
-        {
-            this.world.dayTime = 0;
-            this.world.day++;
+        if (this.world.day > daysPerMonth) {
+          this.world.day = 1;
+          this.world.month++;
 
-            if (this.world.day > 30)
-            {
-                this.world.day = 1;
-                this.world.month++;
-
-                if (this.world.month > 12)
-                {
-                    this.world.month = 1;
-                    this.world.year++;
-
-                    this._yearlyEvents();
-                }
-            }
+          if (this.world.month > monthsPerYear) {
+            this.world.month = 1;
+            this.world.year++;
+            this._yearlyEvents();
+          }
         }
+      }
 
-        UI.updateDate();
+      UI.updateDate();
     }
     // Update civilizations
     for (const civ of this.civs) {
@@ -153,25 +152,34 @@ const Game = {
     const alive = this.civs.filter(c => !c.dead);
     if (!alive.length) return;
 
-    // Random event chance
-    if (rng.next() < 0.25) {
-      const events = [
-        { msg: '🌾 Good harvest! Food supplies increase.', effect: c => { c.resources.food = Math.min(9999, c.resources.food + 80); } },
-        { msg: '🌧 Heavy rains flood the lowlands.', effect: null },
-        { msg: '💰 Merchant season brings extra gold.', effect: c => { c.resources.gold = Math.min(9999, c.resources.gold + 30); } },
-        { msg: '🔥 Wildfire destroys some lumber.', effect: c => { c.resources.wood = Math.max(0, c.resources.wood - 40); } },
-        { msg: '💀 Plague spreads through the land.', effect: c => { for (const v of c.villagers.slice(0, 3)) v.takeDamage(50); } },
-        { msg: '⚒ Mining boom — stone is plentiful!', effect: c => { c.resources.stone = Math.min(9999, c.resources.stone + 60); } },
-      ];
+    // Random yearly events come from data.json.
+    const chance = DATA.TIME?.yearlyEventChance ?? 0.25;
+    if (rng.next() < chance) {
+      const events = DATA.EVENTS?.yearlyRandom || [];
+      if (!events.length) return;
       const ev = rng.pick(events);
       this.world.addEvent(`Year ${this.world.year}: ${ev.msg}`, '#e8a83a');
-      if (ev.effect) alive.forEach(ev.effect);
+      for (const civ of alive) this._applyEventEffects(civ, ev.effects || []);
+    }
+  },
+
+  _applyEventEffects(civ, effects) {
+    const maxResource = DATA.ECONOMY?.maxResource ?? 9999;
+    for (const effect of effects) {
+      if (effect.type === 'resource_add') {
+        const key = effect.resource;
+        civ.resources[key] = Math.max(0, Math.min(maxResource, (civ.resources[key] || 0) + effect.amount));
+      }
+      if (effect.type === 'damage_first_villagers') {
+        for (const v of civ.villagers.slice(0, effect.count || 0)) v.takeDamage(effect.damage || 0);
+      }
     }
   }
 };
 
 // Boot
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
+  await window.DATA_LOAD_PROMISE;
   Renderer.init(document.getElementById('gameCanvas'));
   UI.init();
 });

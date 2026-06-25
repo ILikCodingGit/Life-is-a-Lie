@@ -1,0 +1,1197 @@
+{
+  "GAME": {
+    "timeScale": "hour",
+    "dayNightDisabledAtSpeed": 10,
+    "maxPopulationPerCiv": 300,
+    "title": "LifeIsALie",
+    "defaultStartPop": 20,
+    "speedOptions": [
+      1,
+      2,
+      4,
+      10,
+      25,
+      100
+    ],
+    "localServerRequiredForJson": true
+  },
+  "TERRAIN": {
+    "DEEP_WATER": {
+      "id": 0,
+      "name": "Deep Water",
+      "color": "#1a4a7a",
+      "passable": false,
+      "buildable": false,
+      "resourceMult": 0,
+      "moveCost": 99,
+      "water": true
+    },
+    "WATER": {
+      "id": 1,
+      "name": "Water",
+      "color": "#2a6aaf",
+      "passable": false,
+      "buildable": false,
+      "resourceMult": 0,
+      "moveCost": 99,
+      "water": true
+    },
+    "SAND": {
+      "id": 2,
+      "name": "Sand",
+      "color": "#c9a84c",
+      "passable": true,
+      "buildable": true,
+      "resourceMult": 0.4,
+      "moveCost": 1.5
+    },
+    "GRASS": {
+      "id": 3,
+      "name": "Grassland",
+      "color": "#5d8c3e",
+      "passable": true,
+      "buildable": true,
+      "resourceMult": 1,
+      "moveCost": 1
+    },
+    "FOREST": {
+      "id": 4,
+      "name": "Forest",
+      "color": "#2d6a1e",
+      "passable": true,
+      "buildable": false,
+      "resourceMult": 1.2,
+      "moveCost": 1.8,
+      "wood": true
+    },
+    "HILLS": {
+      "id": 5,
+      "name": "Hills",
+      "color": "#8a7a50",
+      "passable": true,
+      "buildable": true,
+      "resourceMult": 0.7,
+      "moveCost": 1.6,
+      "stone": true
+    },
+    "MOUNTAIN": {
+      "id": 6,
+      "name": "Mountain",
+      "color": "#888888",
+      "passable": false,
+      "buildable": false,
+      "resourceMult": 0,
+      "moveCost": 99,
+      "stone": true
+    },
+    "DESERT": {
+      "id": 7,
+      "name": "Desert",
+      "color": "#d4a84e",
+      "passable": true,
+      "buildable": true,
+      "resourceMult": 0.3,
+      "moveCost": 1.3
+    },
+    "SNOW": {
+      "id": 8,
+      "name": "Snow",
+      "color": "#dde8e8",
+      "passable": true,
+      "buildable": true,
+      "resourceMult": 0.2,
+      "moveCost": 1.6
+    },
+    "SWAMP": {
+      "id": 9,
+      "name": "Swamp",
+      "color": "#3d5e38",
+      "passable": true,
+      "buildable": false,
+      "resourceMult": 0.6,
+      "moveCost": 2.2
+    }
+  },
+  "JOBS": {
+    "IDLE": {
+      "id": "IDLE",
+      "name": "Idle",
+      "color": "#888"
+    },
+    "FARMER": {
+      "id": "FARMER",
+      "name": "Farmer",
+      "color": "#c9a84c"
+    },
+    "WOODCUT": {
+      "id": "WOODCUT",
+      "name": "Woodcutter",
+      "color": "#5d8c3e"
+    },
+    "MINER": {
+      "id": "MINER",
+      "name": "Miner",
+      "color": "#888888"
+    },
+    "BUILDER": {
+      "id": "BUILDER",
+      "name": "Builder",
+      "color": "#d4884e"
+    },
+    "SOLDIER": {
+      "id": "SOLDIER",
+      "name": "Soldier",
+      "color": "#c84040"
+    },
+    "HUNTER": {
+      "id": "HUNTER",
+      "name": "Hunter",
+      "color": "#7a6030"
+    },
+    "BABY": {
+      "id": "BABY",
+      "name": "Baby",
+      "color": "#ffffff"
+    }
+  },
+  "BUILDINGS": {
+    "TOWNHALL": {
+      "id": "TOWNHALL",
+      "name": "Town Hall",
+      "category": "core",
+      "level": 1,
+      "width": 3,
+      "height": 3,
+      "color": "#d4884e",
+      "hp": 1500,
+      "armor": 3,
+      "maxPop": 25,
+      "cost": {
+        "wood": 30,
+        "stone": 30
+      },
+      "roadConnect": true,
+      "tags": [
+        "core",
+        "capital",
+        "townhall"
+      ],
+      "upgradeTo": "TOWNHALL_II"
+    },
+    "TOWNHALL_II": {
+      "id": "TOWNHALL_II",
+      "name": "Fortified Hall",
+      "category": "core",
+      "level": 2,
+      "width": 4,
+      "height": 4,
+      "color": "#c27a45",
+      "hp": 2600,
+      "armor": 6,
+      "maxPop": 45,
+      "cost": {
+        "wood": 120,
+        "stone": 160,
+        "iron": 15
+      },
+      "roadConnect": true,
+      "tags": [
+        "core",
+        "capital",
+        "townhall",
+        "fortified"
+      ],
+      "upgradeTo": "KEEP"
+    },
+    "KEEP": {
+      "id": "KEEP",
+      "name": "Stone Keep",
+      "category": "core",
+      "level": 3,
+      "width": 4,
+      "height": 4,
+      "color": "#9a6b4c",
+      "hp": 4200,
+      "armor": 10,
+      "maxPop": 70,
+      "cost": {
+        "wood": 200,
+        "stone": 350,
+        "iron": 40
+      },
+      "roadConnect": true,
+      "tags": [
+        "core",
+        "capital",
+        "townhall",
+        "fortified",
+        "keep"
+      ]
+    },
+    "HOUSE": {
+      "id": "HOUSE",
+      "name": "House",
+      "category": "housing",
+      "level": 1,
+      "width": 2,
+      "height": 2,
+      "color": "#b07040",
+      "hp": 100,
+      "armor": 0,
+      "maxPop": 6,
+      "cost": {
+        "wood": 10
+      },
+      "roadConnect": true,
+      "tags": [
+        "housing"
+      ]
+    },
+    "FARM": {
+      "id": "FARM",
+      "name": "Farm",
+      "category": "food",
+      "level": 1,
+      "width": 2,
+      "height": 2,
+      "color": "#c9a84c",
+      "hp": 55,
+      "armor": 0,
+      "maxPop": 0,
+      "cost": {
+        "wood": 5
+      },
+      "produces": {
+        "food": 1.6
+      },
+      "roadConnect": true,
+      "tags": [
+        "food"
+      ]
+    },
+    "LUMBERCAMP": {
+      "id": "LUMBERCAMP",
+      "name": "Lumber Camp",
+      "category": "resource",
+      "level": 1,
+      "width": 2,
+      "height": 2,
+      "color": "#4a7a30",
+      "hp": 80,
+      "armor": 1,
+      "maxPop": 0,
+      "cost": {
+        "wood": 15,
+        "stone": 5
+      },
+      "produces": {
+        "wood": 0.45
+      },
+      "roadConnect": true,
+      "tags": [
+        "wood"
+      ]
+    },
+    "MINE": {
+      "id": "MINE",
+      "name": "Mine",
+      "category": "resource",
+      "level": 1,
+      "width": 2,
+      "height": 2,
+      "color": "#666666",
+      "hp": 110,
+      "armor": 2,
+      "maxPop": 0,
+      "cost": {
+        "wood": 10,
+        "stone": 20
+      },
+      "produces": {
+        "stone": 0.3
+      },
+      "roadConnect": true,
+      "tags": [
+        "stone"
+      ]
+    },
+    "BARRACKS": {
+      "id": "BARRACKS",
+      "name": "Barracks",
+      "category": "military",
+      "level": 1,
+      "width": 3,
+      "height": 2,
+      "color": "#8c2020",
+      "hp": 260,
+      "armor": 3,
+      "maxPop": 0,
+      "cost": {
+        "wood": 25,
+        "stone": 35
+      },
+      "roadConnect": true,
+      "tags": [
+        "military"
+      ]
+    },
+    "WATCHTOWER": {
+      "id": "WATCHTOWER",
+      "name": "Watchtower",
+      "category": "defense",
+      "level": 1,
+      "width": 1,
+      "height": 1,
+      "color": "#8c6040",
+      "hp": 220,
+      "armor": 5,
+      "maxPop": 0,
+      "cost": {
+        "wood": 12,
+        "stone": 18
+      },
+      "roadConnect": true,
+      "tags": [
+        "defense"
+      ]
+    },
+    "WALL": {
+      "id": "WALL",
+      "name": "Wall",
+      "category": "defense",
+      "level": 1,
+      "width": 1,
+      "height": 1,
+      "color": "#77705f",
+      "hp": 550,
+      "armor": 9,
+      "maxPop": 0,
+      "cost": {
+        "stone": 6
+      },
+      "roadConnect": false,
+      "tags": [
+        "defense",
+        "wall"
+      ],
+      "blocksMovement": false
+    },
+    "DOCK": {
+      "id": "DOCK",
+      "name": "Dock",
+      "category": "naval",
+      "level": 1,
+      "width": 2,
+      "height": 2,
+      "color": "#8b5a2b",
+      "hp": 180,
+      "armor": 2,
+      "maxPop": 0,
+      "cost": {
+        "wood": 30,
+        "stone": 10
+      },
+      "roadConnect": true,
+      "tags": [
+        "naval",
+        "boat"
+      ]
+    }
+  },
+  "AI_BUILD_PLAN": [
+    {
+      "building": "HOUSE",
+      "priority": 100,
+      "when": {
+        "housingPressure": true
+      }
+    },
+    {
+      "building": "FARM",
+      "priority": 90,
+      "when": {
+        "farmsPerPop": 0.25
+      }
+    },
+    {
+      "building": "LUMBERCAMP",
+      "priority": 70,
+      "when": {
+        "maxCount": 1
+      }
+    },
+    {
+      "building": "MINE",
+      "priority": 65,
+      "when": {
+        "maxCount": 1
+      }
+    },
+    {
+      "building": "DOCK",
+      "priority": 50,
+      "when": {
+        "nearWater": true,
+        "minPop": 14,
+        "maxCount": 1
+      }
+    },
+    {
+      "building": "BARRACKS",
+      "priority": 45,
+      "when": {
+        "minPop": 14,
+        "maxCount": 1
+      }
+    },
+    {
+      "building": "WATCHTOWER",
+      "priority": 40,
+      "when": {
+        "atWar": true,
+        "maxCount": 3
+      }
+    },
+    {
+      "building": "WALL",
+      "priority": 35,
+      "when": {
+        "atWar": true,
+        "maxCount": 18,
+        "hasBuilding": "BARRACKS"
+      }
+    }
+  ],
+  "BOATS": {
+    "RAFT": {
+      "id": "RAFT",
+      "name": "Raft",
+      "color": "#5f3a1c",
+      "sailColor": "#e6e1aa",
+      "cost": {
+        "wood": 1
+      },
+      "speedMult": 0.75,
+      "cooldownHours": 180,
+      "minDistance": 7,
+      "requiredBuilding": null,
+      "maxPassengers": 1,
+      "allowSoldiers": true,
+      "allowCivilians": true
+    },
+    "CANOE": {
+      "id": "CANOE",
+      "name": "Canoe",
+      "color": "#7a4a22",
+      "sailColor": "#f0d18a",
+      "cost": {
+        "wood": 3
+      },
+      "speedMult": 1.05,
+      "cooldownHours": 120,
+      "minDistance": 5,
+      "requiredBuilding": "DOCK",
+      "maxPassengers": 1,
+      "allowSoldiers": true,
+      "allowCivilians": true
+    },
+    "LONGBOAT": {
+      "id": "LONGBOAT",
+      "name": "Longboat",
+      "color": "#8a2f2f",
+      "sailColor": "#f2eeee",
+      "cost": {
+        "wood": 8,
+        "iron": 1
+      },
+      "speedMult": 1.25,
+      "cooldownHours": 90,
+      "minDistance": 4,
+      "requiredBuilding": "DOCK",
+      "maxPassengers": 1,
+      "allowSoldiers": true,
+      "allowCivilians": false
+    }
+  },
+  "ROAD": {
+    "color": "rgba(122, 92, 52, 0.85)",
+    "speedBonus": 1.55
+  },
+  "COMBAT": {
+    "minBuildingDamage": 1,
+    "wallTownHallDamageMultiplier": 0.55
+  },
+  "CIV_COLORS": [
+    "#e05050",
+    "#5080e0",
+    "#50c050",
+    "#e0b030",
+    "#c050e0",
+    "#50d0d0",
+    "#e07030",
+    "#a0a0ff"
+  ],
+  "NAME_PARTS": {
+    "prefixes": [
+      "Great",
+      "New",
+      "Old",
+      "Iron",
+      "Golden",
+      "Silver",
+      "Dark",
+      "High",
+      "Lost",
+      "Ancient",
+      "United",
+      "Free",
+      "Holy",
+      "Wild"
+    ],
+    "roots": [
+      "Avon",
+      "Nord",
+      "Krath",
+      "Ember",
+      "Solian",
+      "Veth",
+      "Calder",
+      "Moros",
+      "Arken",
+      "Theln",
+      "Vorn",
+      "Ilis",
+      "Zeth",
+      "Draven"
+    ],
+    "suffixes": [
+      "Empire",
+      "Republic",
+      "Kingdom",
+      "Realm",
+      "Federation",
+      "Domain",
+      "Tribe",
+      "Alliance",
+      "Pact",
+      "Order"
+    ],
+    "vilFirst": [
+      "Aran",
+      "Bela",
+      "Caro",
+      "Dana",
+      "Eren",
+      "Fira",
+      "Galen",
+      "Hira",
+      "Ivan",
+      "Jora",
+      "Kael",
+      "Lena",
+      "Mira",
+      "Naran",
+      "Orin",
+      "Pira",
+      "Quil",
+      "Rena",
+      "Soren",
+      "Tara",
+      "Ulan",
+      "Vera",
+      "Wren",
+      "Xela",
+      "Yara",
+      "Zane",
+      "Alden",
+      "Bryn",
+      "Cael",
+      "Dara",
+      "Elven",
+      "Frey",
+      "Grel",
+      "Hael",
+      "Idris",
+      "Jalen",
+      "Kira",
+      "Lyra",
+      "Myron",
+      "Nora"
+    ],
+    "vilLast": [
+      "Ash",
+      "Brook",
+      "Cliff",
+      "Dale",
+      "Fen",
+      "Glen",
+      "Holt",
+      "Isle",
+      "Knoll",
+      "Lake",
+      "Mere",
+      "Nook",
+      "Oak",
+      "Pike",
+      "Reed",
+      "Stone",
+      "Thorn",
+      "Vale",
+      "Wood",
+      "Yew"
+    ],
+    "townPre": [
+      "Iron",
+      "Stone",
+      "River",
+      "Hill",
+      "Dark",
+      "Gold",
+      "Silver",
+      "Black",
+      "Green",
+      "Red",
+      "White",
+      "Storm",
+      "Sun",
+      "Moon",
+      "Star"
+    ],
+    "townSuf": [
+      "ford",
+      "haven",
+      "keep",
+      "burg",
+      "hold",
+      "gate",
+      "moor",
+      "bridge",
+      "watch",
+      "field",
+      "crest",
+      "vale",
+      "peak",
+      "rest",
+      "fall"
+    ]
+  },
+  "PERSONALITY": {
+    "AGGRESSIVE": {
+      "war": 0.85,
+      "expand": 0.6,
+      "trade": 0.2,
+      "research": 0.3
+    },
+    "ECONOMIC": {
+      "war": 0.2,
+      "expand": 0.5,
+      "trade": 0.9,
+      "research": 0.5
+    },
+    "SCIENTIFIC": {
+      "war": 0.2,
+      "expand": 0.3,
+      "trade": 0.5,
+      "research": 0.95
+    },
+    "EXPANSIONIST": {
+      "war": 0.5,
+      "expand": 0.95,
+      "trade": 0.3,
+      "research": 0.3
+    },
+    "BALANCED": {
+      "war": 0.5,
+      "expand": 0.5,
+      "trade": 0.5,
+      "research": 0.5
+    }
+  },
+  "TIME": {
+    "scale": "hour",
+    "secondsPerHour": 1,
+    "hoursPerDay": 24,
+    "daysPerMonth": 30,
+    "monthsPerYear": 12,
+    "startDay": 1,
+    "startMonth": 1,
+    "startYear": 1,
+    "startHour": 8,
+    "yearlyEventChance": 0.25
+  },
+  "WORLD_GEN": {
+    "tileSize": 8,
+    "spawn": {
+      "marginRatio": 0.12,
+      "attempts": 30,
+      "spawnSearchRadius": 20
+    },
+    "noise": {
+      "elevation": {
+        "scale": 3.5,
+        "octaves": 6,
+        "persistence": 0.5,
+        "lacunarity": 2,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "moisture": {
+        "scale": 2.8,
+        "octaves": 4,
+        "persistence": 0.55,
+        "lacunarity": 2,
+        "offset": [
+          400,
+          400
+        ]
+      },
+      "temperature": {
+        "scale": 2.2,
+        "octaves": 3,
+        "persistence": 0.5,
+        "lacunarity": 2,
+        "offset": [
+          800,
+          800
+        ]
+      },
+      "forest": {
+        "scale": 6,
+        "octaves": 4,
+        "persistence": 0.5,
+        "lacunarity": 2,
+        "offset": [
+          200,
+          200
+        ]
+      }
+    },
+    "thresholds": {
+      "waterBase": -0.05,
+      "waterSliderMult": 0.3,
+      "waterOffset": -0.15,
+      "deepWaterExtra": -0.15,
+      "mountainBase": 0.35,
+      "mountainSliderMult": 0.3,
+      "peakExtra": 0.1,
+      "forestBase": -0.1,
+      "forestSliderMult": 0.3,
+      "desertSliderMult": 0.3,
+      "desertOffset": -0.15,
+      "snowExtra": -0.15,
+      "desertExtra": 0.1,
+      "dryMoisture": -0.2,
+      "swampMoisture": 0.15,
+      "swampElevationMax": -0.05
+    },
+    "resources": {
+      "gridStep": 3,
+      "spawnChanceMult": 0.4,
+      "amountMin": 50,
+      "amountRandom": 50
+    }
+  },
+  "ECONOMY": {
+    "maxResource": 9999,
+    "startingResources": {
+      "food": 1200,
+      "wood": 260,
+      "stone": 120,
+      "gold": 50,
+      "iron": 25
+    },
+    "passiveProduction": {
+      "food": 0.8,
+      "wood": 0.25,
+      "stone": 0.15
+    },
+    "foodConsumption": {
+      "adultPerSecond": 0.018,
+      "babyMultiplier": 0.25
+    },
+    "influence": {
+      "adultPerSecond": 0.01,
+      "buildingPerSecond": 0.02
+    }
+  },
+  "VILLAGER": {
+    "adultStartAgeMonths": {
+      "min": 216,
+      "max": 420
+    },
+    "babyMatureMonths": 10,
+    "initialHealth": {
+      "babyMin": 55,
+      "babyRandom": 25,
+      "adultMin": 80,
+      "adultRandom": 20
+    },
+    "maxHealth": {
+      "baby": 70,
+      "adult": 100
+    },
+    "initialHunger": {
+      "babyMin": 30,
+      "babyRandom": 20,
+      "adultMin": 20,
+      "adultRandom": 30
+    },
+    "initialEnergy": {
+      "babyMin": 65,
+      "babyRandom": 30,
+      "adultMin": 60,
+      "adultRandom": 40
+    },
+    "hungerRate": {
+      "baby": 0.14,
+      "adult": 0.22,
+      "minFitness": 0.45,
+      "babyEatThreshold": 55,
+      "adultEatThreshold": 85,
+      "starvationAt": 100,
+      "babyStarveDamage": 7,
+      "adultStarveDamage": 5
+    },
+    "eating": {
+      "speed": 55,
+      "doneBelow": 20,
+      "noFoodGiveUpSeconds": 2
+    },
+    "energy": {
+      "babyUse": 0.12,
+      "adultUse": 0.28,
+      "sleepBelow": 10,
+      "wakeAt": 80,
+      "babyRecover": 26,
+      "adultRecover": 20,
+      "sleepTimerMin": 3,
+      "sleepTimerRandom": 2
+    },
+    "lifeExpectancy": {
+      "base": 80,
+      "random": 40,
+      "staminaBonus": 8,
+      "oldAgeDeathRate": 0.01
+    },
+    "combat": {
+      "baseAttackMin": 5,
+      "baseAttackRandom": 10,
+      "attackRange": 1.2,
+      "attackCooldown": 1.5
+    },
+    "work": {
+      "timerMin": 3,
+      "timerRandom": 2,
+      "farmerFood": 10,
+      "woodcutWood": 3,
+      "minerStone": 2,
+      "hunterFood": 3
+    },
+    "wander": {
+      "babyDistMin": 1.5,
+      "babyDistRandom": 4,
+      "adultDistMin": 2,
+      "adultDistRandom": 5,
+      "targetReachedDist": 0.5,
+      "babySpeedMult": 0.65
+    },
+    "stateDecision": {
+      "min": 0.2,
+      "random": 1.2
+    },
+    "flee": {
+      "civilianRange": 8,
+      "civilianDist": 12,
+      "babyDist": 8
+    }
+  },
+  "REPRODUCTION": {
+    "initialCooldownHours": {
+      "min": 48,
+      "max": 144
+    },
+    "requirements": {
+      "minAge": 18,
+      "maxAge": 45,
+      "minHealth": 55,
+      "maxHunger": 65,
+      "minEnergy": 25
+    },
+    "mateSearchRange": 4,
+    "postBirthCooldownHours": {
+      "base": 80,
+      "random": 120,
+      "partnerExtraRandom": 48
+    },
+    "partnerScore": {
+      "health": 0.4,
+      "hunger": 0.2,
+      "envFitness": 30,
+      "distancePenalty": 5
+    }
+  },
+  "GENETICS": {
+    "clamp": {
+      "min": 0.55,
+      "max": 1.55
+    },
+    "mutationAmount": 0.08,
+    "traitBase": {
+      "min": 0.9,
+      "random": 0.25
+    },
+    "randomGeneEnvBlend": {
+      "base": 0.75,
+      "ideal": 0.25
+    },
+    "inheritBlend": {
+      "inherited": 0.82,
+      "environment": 0.18,
+      "terrainInherited": 0.78,
+      "terrainEnvironment": 0.22,
+      "mutation": 0.06,
+      "terrainMutation": 0.07
+    },
+    "terrainKeys": [
+      "forest",
+      "hills",
+      "desert",
+      "snow",
+      "swamp",
+      "grass"
+    ]
+  },
+  "MOVEMENT": {
+    "baseSpeed": {
+      "min": 1.2,
+      "random": 0.6
+    },
+    "roadSpeedBonus": 1.55,
+    "boat": {
+      "enabled": true,
+      "cooldownFallbackHours": 180,
+      "maxLandDistanceBeforeBoat": 12
+    }
+  },
+  "AI": {
+    "timers": {
+      "aiMin": 4,
+      "aiRandom": 6,
+      "buildMin": 12,
+      "buildRandom": 15,
+      "jobAssignmentInterval": 12
+    },
+    "jobs": {
+      "soldierRatioPeace": 0.06,
+      "soldierRatioWar": 0.26,
+      "farmerRatio": 0.42,
+      "woodcutRatio": 0.22,
+      "minerRatio": 0.12
+    },
+    "war": {
+      "minAdultPop": 10,
+      "declareChanceMult": 0.12,
+      "peaceChance": 0.018,
+      "peaceIfAdultPopBelow": 7,
+      "peaceIfFoodBelow": 60,
+      "randomPeaceChance": 0.25,
+      "candidateTopN": 3
+    },
+    "building": {
+      "searchRadiusStart": 3,
+      "searchRadiusEnd": 25,
+      "attemptsPerRadius": 8,
+      "defenseNearTownRandomRadius": 6
+    }
+  },
+  "RENDER": {
+    "initialZoom": 3,
+    "cameraPanMarginPx": 320,
+    "dayNight": {
+      "enabled": true,
+      "disabledAtSpeed": 10,
+      "maxDarkness": 0.45,
+      "nightColor": [
+        0,
+        0,
+        40
+      ]
+    },
+    "territory": {
+      "radius": 120,
+      "fillAlpha": 0.08,
+      "strokeAlpha": 0.18
+    },
+    "eventLogMax": 5,
+    "consoleMaxRows": 120
+  },
+  "RESOURCES": {
+    "food": {
+      "name": "Food",
+      "color": "#c9a84c"
+    },
+    "wood": {
+      "name": "Wood",
+      "color": "#5d8c3e"
+    },
+    "stone": {
+      "name": "Stone",
+      "color": "#888888"
+    },
+    "gold": {
+      "name": "Gold",
+      "color": "#e0b030"
+    },
+    "iron": {
+      "name": "Iron",
+      "color": "#aaaabb"
+    }
+  },
+  "UNITS": {
+    "VILLAGER": {
+      "id": "VILLAGER",
+      "name": "Villager"
+    },
+    "BABY": {
+      "id": "BABY",
+      "name": "Baby",
+      "maturesTo": "VILLAGER"
+    }
+  },
+  "TECH": {
+    "AGRICULTURE": {
+      "id": "AGRICULTURE",
+      "name": "Agriculture",
+      "cost": {},
+      "unlocks": [
+        "FARM"
+      ],
+      "modifiers": {
+        "foodProductionMult": 1
+      }
+    },
+    "BOATBUILDING": {
+      "id": "BOATBUILDING",
+      "name": "Boatbuilding",
+      "cost": {
+        "wood": 80
+      },
+      "unlocks": [
+        "DOCK",
+        "CANOE"
+      ]
+    },
+    "SEAFARING": {
+      "id": "SEAFARING",
+      "name": "Seafaring",
+      "cost": {
+        "wood": 160,
+        "iron": 10
+      },
+      "requires": [
+        "BOATBUILDING"
+      ],
+      "unlocks": [
+        "LONGBOAT"
+      ]
+    },
+    "MASONRY": {
+      "id": "MASONRY",
+      "name": "Masonry",
+      "cost": {
+        "stone": 120
+      },
+      "unlocks": [
+        "WALL",
+        "WATCHTOWER"
+      ]
+    },
+    "FORTIFICATION": {
+      "id": "FORTIFICATION",
+      "name": "Fortification",
+      "cost": {
+        "stone": 250,
+        "iron": 20
+      },
+      "requires": [
+        "MASONRY"
+      ],
+      "unlocks": [
+        "TOWNHALL_II",
+        "KEEP"
+      ]
+    }
+  },
+  "EVENTS": {
+    "yearlyRandom": [
+      {
+        "id": "GOOD_HARVEST",
+        "chanceWeight": 1,
+        "msg": "🌾 Good harvest! Food supplies increase.",
+        "effects": [
+          {
+            "type": "resource_add",
+            "resource": "food",
+            "amount": 80
+          }
+        ]
+      },
+      {
+        "id": "HEAVY_RAINS",
+        "chanceWeight": 1,
+        "msg": "🌧 Heavy rains flood the lowlands.",
+        "effects": []
+      },
+      {
+        "id": "MERCHANT_SEASON",
+        "chanceWeight": 1,
+        "msg": "💰 Merchant season brings extra gold.",
+        "effects": [
+          {
+            "type": "resource_add",
+            "resource": "gold",
+            "amount": 30
+          }
+        ]
+      },
+      {
+        "id": "WILDFIRE",
+        "chanceWeight": 1,
+        "msg": "🔥 Wildfire destroys some lumber.",
+        "effects": [
+          {
+            "type": "resource_add",
+            "resource": "wood",
+            "amount": -40
+          }
+        ]
+      },
+      {
+        "id": "PLAGUE",
+        "chanceWeight": 1,
+        "msg": "💀 Plague spreads through the land.",
+        "effects": [
+          {
+            "type": "damage_first_villagers",
+            "count": 3,
+            "damage": 50
+          }
+        ]
+      },
+      {
+        "id": "MINING_BOOM",
+        "chanceWeight": 1,
+        "msg": "⚒ Mining boom — stone is plentiful!",
+        "effects": [
+          {
+            "type": "resource_add",
+            "resource": "stone",
+            "amount": 60
+          }
+        ]
+      }
+    ]
+  }
+}

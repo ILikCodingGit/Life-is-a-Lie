@@ -18,7 +18,12 @@ const Combat = {
             const dist = Math.hypot(bld.tx + bld.def.width/2 - v.x, bld.ty + bld.def.height/2 - v.y);
             if (dist < 2) {
               if (v.attackCooldown <= 0) {
-                bld.hp -= v.attackPower;
+                const armor = bld.armor ?? bld.def?.armor ?? 0;
+                const mult = (bld.def?.tags || []).includes('townhall') || (bld.def?.tags || []).includes('wall')
+                  ? (DATA.COMBAT?.wallTownHallDamageMultiplier || 0.55)
+                  : 1;
+                const dmg = Math.max(DATA.COMBAT?.minBuildingDamage || 1, Math.floor((v.attackPower - armor) * mult));
+                bld.hp -= dmg;
                 v.attackCooldown = 1.5;
                 if (bld.hp <= 0) {
                   Combat.destroyBuilding(world, civs, bld);
@@ -47,14 +52,14 @@ const Combat = {
 
   destroyBuilding(world, civs, b) {
     const civ = b.civ;
-    const wasTownhall = b.def.id === 'TOWNHALL';
+    const wasTownhall = (b.def.tags || []).includes('townhall');
     world.removeBuilding(b);
     if (civ) {
       const idx = civ.buildings.indexOf(b);
       if (idx >= 0) civ.buildings.splice(idx, 1);
       if (wasTownhall) {
         civ.townhall = null;
-        world.addEvent(`🏚 ${civ.name}'s Town Hall has fallen!`, '#c84040');
+        world.addEvent(`🏚 ${civ.colorName ? civ.colorName() : civ.name}'s Town Hall has fallen!`, '#c84040');
       }
     }
   }

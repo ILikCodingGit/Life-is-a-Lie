@@ -78,7 +78,7 @@ const Renderer = {
     if (!Game.world) return;
 
     const worldPx = Game.world.size * Game.world.tileSize;
-    const margin = Math.max(this.canvas.width, this.canvas.height) / this.cam.zoom * 0.35;
+    const margin = (DATA.RENDER?.cameraPanMarginPx ?? 320) / this.cam.zoom;
     const maxX = Math.max(0, worldPx - this.canvas.width / this.cam.zoom) + margin;
     const maxY = Math.max(0, worldPx - this.canvas.height / this.cam.zoom) + margin;
 
@@ -189,7 +189,7 @@ const Renderer = {
 
     // Roads
     if (world.roads && world.roads.size) {
-      ctx.fillStyle = "rgba(122, 92, 52, 0.85)";
+      ctx.fillStyle = DATA.ROAD?.color || "rgba(122, 92, 52, 0.85)";
       for (const key of world.roads) {
         const [rx, ry] = key.split(',').map(Number);
         ctx.fillRect(rx * TS + TS * 0.25, ry * TS + TS * 0.25, TS * 0.5, TS * 0.5);
@@ -242,17 +242,17 @@ const Renderer = {
       const cx = (civ.townhall.tx + civ.townhall.def.width / 2) * TS;
       const cy = (civ.townhall.ty + civ.townhall.def.height / 2) * TS;
 
-      ctx.globalAlpha = 0.08;
+      ctx.globalAlpha = DATA.RENDER?.territory?.fillAlpha ?? 0.08;
       ctx.fillStyle = civ.color;
       ctx.beginPath();
-      ctx.arc(cx, cy, 120, 0, Math.PI * 2);
+      ctx.arc(cx, cy, DATA.RENDER?.territory?.radius ?? 120, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.globalAlpha = 0.18;
+      ctx.globalAlpha = DATA.RENDER?.territory?.strokeAlpha ?? 0.18;
       ctx.strokeStyle = civ.color;
       ctx.lineWidth = 1 / z;
       ctx.beginPath();
-      ctx.arc(cx, cy, 120, 0, Math.PI * 2);
+      ctx.arc(cx, cy, DATA.RENDER?.territory?.radius ?? 120, 0, Math.PI * 2);
       ctx.stroke();
     }
 
@@ -315,9 +315,10 @@ const Renderer = {
         const vy = v.y * TS + bob;
 
         if (v.onBoat) {
-          ctx.fillStyle = "rgba(95, 58, 28, 0.95)";
+          const boat = v.boatDef || (v.boatType ? DATA.BOATS?.[v.boatType] : null) || DATA.BOATS?.RAFT || {};
+          ctx.fillStyle = boat.color || "rgba(95, 58, 28, 0.95)";
           ctx.fillRect(vx - vr * 1.8, vy + vr * 0.15, vr * 3.6, vr * 1.25);
-          ctx.fillStyle = "rgba(230, 225, 170, 0.9)";
+          ctx.fillStyle = boat.sailColor || "rgba(230, 225, 170, 0.9)";
           ctx.fillRect(vx - vr * 0.25, vy - vr * 1.5, vr * 0.5, vr * 1.6);
         }
 
@@ -388,7 +389,8 @@ const Renderer = {
 
   _drawDayNightOverlay(ctx, world) {
     // Avoid rapid flashing at high speeds. 10x+ disables the night overlay completely.
-    if (typeof Game !== 'undefined' && Game.speed >= 10) return;
+    if (!(DATA.RENDER?.dayNight?.enabled ?? true)) return;
+    if (typeof Game !== 'undefined' && Game.speed >= (DATA.RENDER?.dayNight?.disabledAtSpeed ?? DATA.GAME?.dayNightDisabledAtSpeed ?? 10)) return;
 
     const hour = ((world.dayTime ?? 12) + (typeof Game !== 'undefined' ? Game.tickAccum : 0)) % 24;
 
@@ -404,7 +406,10 @@ const Renderer = {
 
     if (darkness <= 0) return;
 
-    ctx.fillStyle = `rgba(0,0,40,${darkness * 0.45})`;
+    const dn = DATA.RENDER?.dayNight || {};
+    const c = dn.nightColor || [0, 0, 40];
+    const maxDark = dn.maxDarkness ?? 0.45;
+    ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${darkness * maxDark})`;
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
   },
 
@@ -456,7 +461,7 @@ const Renderer = {
 
     let y = this.canvas.height - 50;
 
-    for (let i = 0; i < Math.min(5, world.events.length); i++) {
+    for (let i = 0; i < Math.min(DATA.RENDER?.eventLogMax ?? 5, world.events.length); i++) {
       const ev = world.events.filter(e => e.overlay !== false)[i];
       if (!ev) continue;
       const age = world.tick - ev.tick;

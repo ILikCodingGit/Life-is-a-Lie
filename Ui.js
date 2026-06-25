@@ -2,6 +2,14 @@ const UI = {
   selected: null,
 
   init() {
+    // Defaults are read from data.json where possible.
+    const startPop = document.getElementById('sl-startpop');
+    const startPopLabel = document.getElementById('lbl-startpop');
+    if (startPop && DATA.GAME?.defaultStartPop) {
+      startPop.value = DATA.GAME.defaultStartPop;
+      if (startPopLabel) startPopLabel.textContent = String(DATA.GAME.defaultStartPop);
+    }
+
     const sliders = [
       ['sl-forest', 'lbl-forest', '%'],
       ['sl-water', 'lbl-water', '%'],
@@ -160,6 +168,8 @@ const UI = {
         <div class="sb-health-bar"><div class="sb-health-fill" style="width:${hpPct}%;background:${hpPct > 50 ? 'var(--accent)' : 'var(--danger)'}"></div></div>
         <div class="sb-row"><span class="sb-label">Owner</span><span class="sb-value" style="color:${b.civ?.color || '#fff'}">${b.civ?.name || '?'}</span></div>
         <div class="sb-row"><span class="sb-label">HP</span><span class="sb-value">${b.hp.toFixed(0)} / ${b.maxHp}</span></div>
+        <div class="sb-row"><span class="sb-label">Armor</span><span class="sb-value">${b.armor || 0}</span></div>
+        <div class="sb-row"><span class="sb-label">Type</span><span class="sb-value">${b.category || b.def.category || 'misc'}</span></div>
         <div class="sb-row"><span class="sb-label">Size</span><span class="sb-value">${b.def.width}×${b.def.height}</span></div>
       `;
     }
@@ -217,7 +227,7 @@ const UI = {
 
     body.prepend(row);
 
-    while (body.children.length > 120) {
+    while (body.children.length > (DATA.RENDER?.consoleMaxRows ?? 120)) {
       body.removeChild(body.lastChild);
     }
   },

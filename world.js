@@ -1,17 +1,17 @@
 class World {
   constructor(config) {
     this.size = config.size | 0;
-    this.tileSize = 8;
+    this.tileSize = DATA.WORLD_GEN?.tileSize ?? 8;
     this.config = config;
     this.rng = new RNG(config.seed);
     this.tiles = null;
     this.resources = [];  // { x, y, type, amount }
     this.buildings = [];
-    this.roads = new Set(); // tile keys like "x,y
-    this.day = 1;
-    this.month = 1;
-    this.year = 1;
-    this.dayTime = 8; // 8 AM start
+    this.roads = new Set(); // tile keys like "x,y"
+    this.day = DATA.TIME?.startDay ?? 1;
+    this.month = DATA.TIME?.startMonth ?? 1;
+    this.year = DATA.TIME?.startYear ?? 1;
+    this.dayTime = DATA.TIME?.startHour ?? 8;
     this.tick = 0;
     this.events = [];
   }
@@ -21,17 +21,30 @@ class World {
     const S = this.size;
     const cfg = this.config;
 
-    // Multi-layer noise
-    const elev = (x, y) => Noise.octave(x / S * 3.5, y / S * 3.5, 6, 0.5, 2.0);
-    const moist = (x, y) => Noise.octave(x / S * 2.8 + 400, y / S * 2.8 + 400, 4, 0.55, 2.0);
-    const temp = (x, y) => Noise.octave(x / S * 2.2 + 800, y / S * 2.2 + 800, 3, 0.5, 2.0);
-    const forestN = (x, y) => Noise.octave(x / S * 6 + 200, y / S * 6 + 200, 4, 0.5, 2.0);
+    // Multi-layer noise. Parameters live in data.json.
+    const ncfg = DATA.WORLD_GEN?.noise || {};
+    const makeNoise = (key, fallback) => {
+      const n = ncfg[key] || fallback;
+      const off = n.offset || [0, 0];
+      return (x, y) => Noise.octave(
+        x / S * n.scale + off[0],
+        y / S * n.scale + off[1],
+        n.octaves,
+        n.persistence,
+        n.lacunarity
+      );
+    };
+    const elev = makeNoise('elevation', { scale: 3.5, octaves: 6, persistence: 0.5, lacunarity: 2.0, offset: [0, 0] });
+    const moist = makeNoise('moisture', { scale: 2.8, octaves: 4, persistence: 0.55, lacunarity: 2.0, offset: [400, 400] });
+    const temp = makeNoise('temperature', { scale: 2.2, octaves: 3, persistence: 0.5, lacunarity: 2.0, offset: [800, 800] });
+    const forestN = makeNoise('forest', { scale: 6, octaves: 4, persistence: 0.5, lacunarity: 2.0, offset: [200, 200] });
 
-    // Thresholds driven by config sliders (0-100 mapped to 0-1)
-    const waterThr = -0.05 + (cfg.water / 100) * 0.30 - 0.15;
-    const mountainThr = 0.35 + (1 - cfg.mountain / 100) * 0.30;
-    const forestThr = -0.1 + (1 - cfg.forest / 100) * 0.30;
-    const desertThr = (cfg.desert / 100) * 0.3 - 0.15;
+    // Thresholds driven by config sliders. Formula values live in data.json.
+    const th = DATA.WORLD_GEN?.thresholds || {};
+    const waterThr = (th.waterBase ?? -0.05) + (cfg.water / 100) * (th.waterSliderMult ?? 0.30) + (th.waterOffset ?? -0.15);
+    const mountainThr = (th.mountainBase ?? 0.35) + (1 - cfg.mountain / 100) * (th.mountainSliderMult ?? 0.30);
+    const forestThr = (th.forestBase ?? -0.1) + (1 - cfg.forest / 100) * (th.forestSliderMult ?? 0.30);
+    const desertThr = (cfg.desert / 100) * (th.desertSliderMult ?? 0.3) + (th.desertOffset ?? -0.15);
 
     this.tiles = new Uint8Array(S * S);
     const T = DATA.TERRAIN;
@@ -44,13 +57,13 @@ class World {
         const f = forestN(x, y);
 
         let tile;
-        if (e < waterThr - 0.15) tile = T.DEEP_WATER;
+        if (e < waterThr + (DATA.WORLD_GEN?.thresholds?.deepWaterExtra ?? -0.15)) tile = T.DEEP_WATER;
         else if (e < waterThr) tile = T.WATER;
-        else if (e > mountainThr + 0.1) tile = T.MOUNTAIN;
+        else if (e > mountainThr + (DATA.WORLD_GEN?.thresholds?.peakExtra ?? 0.1)) tile = T.MOUNTAIN;
         else if (e > mountainThr) tile = T.HILLS;
-        else if (t < desertThr - 0.15) tile = T.SNOW;
-        else if (t > desertThr + 0.1 && m < -0.2) tile = T.DESERT;
-        else if (m > 0.15 && e < -0.05) tile = T.SWAMP;
+        else if (t < desertThr + (DATA.WORLD_GEN?.thresholds?.snowExtra ?? -0.15)) tile = T.SNOW;
+        else if (t > desertThr + (DATA.WORLD_GEN?.thresholds?.desertExtra ?? 0.1) && m < (DATA.WORLD_GEN?.thresholds?.dryMoisture ?? -0.2)) tile = T.DESERT;
+        else if (m > (DATA.WORLD_GEN?.thresholds?.swampMoisture ?? 0.15) && e < (DATA.WORLD_GEN?.thresholds?.swampElevationMax ?? -0.05)) tile = T.SWAMP;
         else if (f > forestThr && e > waterThr) tile = T.FOREST;
         else tile = T.GRASS;
 
@@ -63,9 +76,11 @@ class World {
     const resMult = cfg.resourceAbundance / 100;
     const TERRAIN_LIST = Object.values(T);
 
-    for (let y = 2; y < S - 2; y += 3) {
-      for (let x = 2; x < S - 2; x += 3) {
-        if (this.rng.next() > resMult * 0.4) continue;
+    const rcfg = DATA.WORLD_GEN?.resources || {};
+    const step = rcfg.gridStep ?? 3;
+    for (let y = 2; y < S - 2; y += step) {
+      for (let x = 2; x < S - 2; x += step) {
+        if (this.rng.next() > resMult * (rcfg.spawnChanceMult ?? 0.4)) continue;
         const tid = this.tiles[y * S + x];
         const terr = TERRAIN_LIST.find(t => t.id === tid);
         if (!terr || !terr.passable) continue;
@@ -74,7 +89,7 @@ class World {
         else if (terr.stone && this.rng.next() < 0.7) type = 'stone';
         else if (terr.id === T.GRASS.id && this.rng.next() < 0.5) type = 'food';
         else if (terr.id === T.HILLS.id && this.rng.next() < 0.4) type = 'stone';
-        if (type) this.resources.push({ x, y, type, amount: 50 + this.rng.int(0, 50) });
+        if (type) this.resources.push({ x, y, type, amount: (rcfg.amountMin ?? 50) + this.rng.int(0, rcfg.amountRandom ?? 50) });
       }
     }
   }
@@ -274,6 +289,34 @@ class World {
     return Math.max(0.45, Math.min(1.55, terrainScore * 0.65 + scalarFit * 0.35));
   }
 
+  getBestBoatFor(civ, villager, targetX, targetY) {
+    const boats = Object.values(DATA.BOATS || {});
+    let best = null;
+    for (const boat of boats) {
+      if (!boat) continue;
+      if (villager?.job === 'SOLDIER' && boat.allowSoldiers === false) continue;
+      if (villager?.job !== 'SOLDIER' && boat.allowCivilians === false) continue;
+      if (boat.requiredBuilding && !civ?.getBuildingCount?.(boat.requiredBuilding)) continue;
+      if (!canAfford(civ.resources, dataCost(boat))) continue;
+      const d = Math.hypot(targetX - villager.x, targetY - villager.y);
+      if (d < (boat.minDistance || 0)) continue;
+      if (!best || (boat.speedMult || 1) > (best.speedMult || 1)) best = boat;
+    }
+    return best || (DATA.BOATS ? DATA.BOATS.RAFT : null);
+  }
+
+  isNearWater(x, y, radius = 5) {
+    const cx = Math.floor(x), cy = Math.floor(y);
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        const tx = cx + dx, ty = cy + dy;
+        if (tx < 0 || ty < 0 || tx >= this.size || ty >= this.size) continue;
+        if (this.isWater(tx, ty)) return true;
+      }
+    }
+    return false;
+  }
+
   addEvent(msg, color, options = {}) {
     const event = {
       msg,
@@ -301,10 +344,18 @@ class Building {
     this.tx = tx;
     this.ty = ty;
     this.civ = civ;
-    this.hp = def.hp;
-    this.maxHp = def.hp;
+    this.hp = def.hp || 100;
+    this.maxHp = def.hp || 100;
+    this.armor = def.armor || 0;
+    this.level = def.level || 1;
+    this.category = def.category || 'misc';
+    this.tags = def.tags || [];
     this.built = true;
     this.id = ++Building._id;
+  }
+
+  hasTag(tag) {
+    return this.tags.includes(tag);
   }
 }
 Building._id = 0;
