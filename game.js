@@ -61,6 +61,8 @@ const Game = {
 
     Renderer.tileCacheDirty = true;
     UI.updateCivBadges();
+    UI.updateDate();
+    this.world.addEvent(`🌍 World generated with ${this.civs.length} civilizations.`, "#e8a83a", { overlay: false });
   },
 
   _spreadPositions(count, S, rng) {
@@ -101,14 +103,36 @@ const Game = {
     this.world.tick++;
     this.tickAccum += dt;
 
-    // Advance year (roughly every 60 real-seconds at 1×)
-    if (this.tickAccum >= 60) {
-      this.tickAccum -= 60;
-      this.world.year++;
-      UI.updateYear();
-      this._yearlyEvents();
-    }
+    // 1sec = 1 hour
 
+    while (this.tickAccum >= 1)
+    {
+        this.tickAccum -= 1;
+
+        this.world.dayTime++;
+
+        if (this.world.dayTime >= 24)
+        {
+            this.world.dayTime = 0;
+            this.world.day++;
+
+            if (this.world.day > 30)
+            {
+                this.world.day = 1;
+                this.world.month++;
+
+                if (this.world.month > 12)
+                {
+                    this.world.month = 1;
+                    this.world.year++;
+
+                    this._yearlyEvents();
+                }
+            }
+        }
+
+        UI.updateDate();
+    }
     // Update civilizations
     for (const civ of this.civs) {
       civ.update(dt, this.civs);

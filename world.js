@@ -7,7 +7,10 @@ class World {
     this.tiles = null;
     this.resources = [];  // { x, y, type, amount }
     this.buildings = [];
+    this.day = 1;
+    this.month = 1;
     this.year = 1;
+    this.dayTime = 8; // 8 AM start
     this.tick = 0;
     this.events = [];
   }
@@ -18,16 +21,16 @@ class World {
     const cfg = this.config;
 
     // Multi-layer noise
-    const elev   = (x,y) => Noise.octave(x/S*3.5, y/S*3.5, 6, 0.5, 2.0);
-    const moist   = (x,y) => Noise.octave(x/S*2.8 + 400, y/S*2.8 + 400, 4, 0.55, 2.0);
-    const temp    = (x,y) => Noise.octave(x/S*2.2 + 800, y/S*2.2 + 800, 3, 0.5, 2.0);
-    const forestN = (x,y) => Noise.octave(x/S*6 + 200, y/S*6 + 200, 4, 0.5, 2.0);
+    const elev = (x, y) => Noise.octave(x / S * 3.5, y / S * 3.5, 6, 0.5, 2.0);
+    const moist = (x, y) => Noise.octave(x / S * 2.8 + 400, y / S * 2.8 + 400, 4, 0.55, 2.0);
+    const temp = (x, y) => Noise.octave(x / S * 2.2 + 800, y / S * 2.2 + 800, 3, 0.5, 2.0);
+    const forestN = (x, y) => Noise.octave(x / S * 6 + 200, y / S * 6 + 200, 4, 0.5, 2.0);
 
     // Thresholds driven by config sliders (0-100 mapped to 0-1)
-    const waterThr    = -0.05 + (cfg.water    / 100) * 0.30 - 0.15;
-    const mountainThr =  0.35 + (1 - cfg.mountain / 100) * 0.30;
-    const forestThr   = -0.1  + (1 - cfg.forest   / 100) * 0.30;
-    const desertThr   = (cfg.desert / 100) * 0.3 - 0.15;
+    const waterThr = -0.05 + (cfg.water / 100) * 0.30 - 0.15;
+    const mountainThr = 0.35 + (1 - cfg.mountain / 100) * 0.30;
+    const forestThr = -0.1 + (1 - cfg.forest / 100) * 0.30;
+    const desertThr = (cfg.desert / 100) * 0.3 - 0.15;
 
     this.tiles = new Uint8Array(S * S);
     const T = DATA.TERRAIN;
@@ -40,15 +43,15 @@ class World {
         const f = forestN(x, y);
 
         let tile;
-        if (e < waterThr - 0.15)       tile = T.DEEP_WATER;
-        else if (e < waterThr)          tile = T.WATER;
+        if (e < waterThr - 0.15) tile = T.DEEP_WATER;
+        else if (e < waterThr) tile = T.WATER;
         else if (e > mountainThr + 0.1) tile = T.MOUNTAIN;
-        else if (e > mountainThr)       tile = T.HILLS;
-        else if (t < desertThr - 0.15)  tile = T.SNOW;
+        else if (e > mountainThr) tile = T.HILLS;
+        else if (t < desertThr - 0.15) tile = T.SNOW;
         else if (t > desertThr + 0.1 && m < -0.2) tile = T.DESERT;
         else if (m > 0.15 && e < -0.05) tile = T.SWAMP;
         else if (f > forestThr && e > waterThr) tile = T.FOREST;
-        else                            tile = T.GRASS;
+        else tile = T.GRASS;
 
         this.tiles[y * S + x] = tile.id;
       }
@@ -59,8 +62,8 @@ class World {
     const resMult = cfg.resourceAbundance / 100;
     const TERRAIN_LIST = Object.values(T);
 
-    for (let y = 2; y < S-2; y += 3) {
-      for (let x = 2; x < S-2; x += 3) {
+    for (let y = 2; y < S - 2; y += 3) {
+      for (let x = 2; x < S - 2; x += 3) {
         if (this.rng.next() > resMult * 0.4) continue;
         const tid = this.tiles[y * S + x];
         const terr = TERRAIN_LIST.find(t => t.id === tid);
@@ -92,8 +95,8 @@ class World {
       const angle = this.rng.next() * Math.PI * 2;
       const dx = Math.round(Math.cos(angle) * r);
       const dy = Math.round(Math.sin(angle) * r);
-      const tx = Math.max(1, Math.min(S-2, hint_x + dx));
-      const ty = Math.max(1, Math.min(S-2, hint_y + dy));
+      const tx = Math.max(1, Math.min(S - 2, hint_x + dx));
+      const ty = Math.max(1, Math.min(S - 2, hint_y + dy));
       if (this.isPassable(tx, ty)) return { x: tx, y: ty };
     }
     return null;
@@ -116,16 +119,141 @@ class World {
   isBuildable(tx, ty, w, h) {
     for (let dy = 0; dy < h; dy++) {
       for (let dx = 0; dx < w; dx++) {
-        if (!this.tileAt(tx+dx, ty+dy).buildable) return false;
-        if (this.getBuildingAt(tx+dx, ty+dy)) return false;
+        if (!this.tileAt(tx + dx, ty + dy).buildable) return false;
+        if (this.getBuildingAt(tx + dx, ty + dy)) return false;
       }
     }
     return true;
   }
 
-  addEvent(msg, color) {
-    this.events.unshift({ msg, color: color || '#c9a84c', tick: this.tick });
-    if (this.events.length > 40) this.events.pop();
+  getTerrainKeyAt(x, y) {
+    const t = this.tileAt(Math.floor(x), Math.floor(y));
+    if (t.id === DATA.TERRAIN.FOREST.id) return 'forest';
+    if (t.id === DATA.TERRAIN.HILLS.id || t.id === DATA.TERRAIN.MOUNTAIN.id) return 'hills';
+    if (t.id === DATA.TERRAIN.DESERT.id || t.id === DATA.TERRAIN.SAND.id) return 'desert';
+    if (t.id === DATA.TERRAIN.SNOW.id) return 'snow';
+    if (t.id === DATA.TERRAIN.SWAMP.id) return 'swamp';
+    return 'grass';
+  }
+
+  getLocalBiomeProfile(x, y, radius = 7) {
+    const profile = { forest: 0, hills: 0, desert: 0, snow: 0, swamp: 0, grass: 0 };
+    let total = 0;
+    const cx = Math.floor(x), cy = Math.floor(y);
+
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        if (dx * dx + dy * dy > radius * radius) continue;
+        const tx = cx + dx, ty = cy + dy;
+        if (tx < 0 || ty < 0 || tx >= this.size || ty >= this.size) continue;
+        const key = this.getTerrainKeyAt(tx, ty);
+        profile[key]++;
+        total++;
+      }
+    }
+
+    if (!total) {
+      profile.grass = 1;
+      return profile;
+    }
+
+    for (const k of Object.keys(profile)) profile[k] /= total;
+    return profile;
+  }
+
+  getDominantBiomeAt(x, y, radius = 7) {
+    const profile = this.getLocalBiomeProfile(x, y, radius);
+    return Object.entries(profile).sort((a, b) => b[1] - a[1])[0][0];
+  }
+
+  getGeneIdealAt(x, y) {
+    const profile = this.getLocalBiomeProfile(x, y, 8);
+    const dominant = Object.entries(profile).sort((a, b) => b[1] - a[1])[0][0];
+
+    const ideal = {
+      speed: 1,
+      stamina: 1,
+      metabolism: 1,
+      strength: 1,
+      fertility: 1,
+      workRate: 1,
+      terrain: { forest: 1, hills: 1, desert: 1, snow: 1, swamp: 1, grass: 1 }
+    };
+
+    // Bias genes toward what survives best around the settlement.
+    if (dominant === 'forest') {
+      ideal.speed = 1.08;
+      ideal.workRate = 1.18;
+      ideal.metabolism = 0.92;
+      ideal.terrain.forest = 1.35;
+    } else if (dominant === 'hills') {
+      ideal.strength = 1.18;
+      ideal.stamina = 1.12;
+      ideal.workRate = 1.08;
+      ideal.terrain.hills = 1.35;
+    } else if (dominant === 'desert') {
+      ideal.stamina = 1.28;
+      ideal.metabolism = 0.75;
+      ideal.speed = 1.05;
+      ideal.fertility = 0.92;
+      ideal.terrain.desert = 1.4;
+    } else if (dominant === 'snow') {
+      ideal.stamina = 1.25;
+      ideal.metabolism = 0.82;
+      ideal.strength = 1.08;
+      ideal.fertility = 0.9;
+      ideal.terrain.snow = 1.4;
+    } else if (dominant === 'swamp') {
+      ideal.stamina = 1.2;
+      ideal.metabolism = 0.86;
+      ideal.speed = 0.95;
+      ideal.terrain.swamp = 1.4;
+    } else {
+      ideal.fertility = 1.15;
+      ideal.workRate = 1.08;
+      ideal.terrain.grass = 1.25;
+    }
+
+    return ideal;
+  }
+
+  getEnvironmentFitness(genes, x, y) {
+    if (!genes) return 1;
+    const profile = this.getLocalBiomeProfile(x, y, 6);
+    let terrainScore = 0;
+    for (const [key, weight] of Object.entries(profile)) {
+      terrainScore += weight * (genes.terrain?.[key] ?? 1);
+    }
+
+    const ideal = this.getGeneIdealAt(x, y);
+    const scalarFit = (
+      1.0 - Math.abs((genes.speed ?? 1) - ideal.speed) * 0.25 +
+      1.0 - Math.abs((genes.stamina ?? 1) - ideal.stamina) * 0.25 +
+      1.0 - Math.abs((genes.metabolism ?? 1) - ideal.metabolism) * 0.30 +
+      1.0 - Math.abs((genes.workRate ?? 1) - ideal.workRate) * 0.20
+    ) / 4;
+
+    return Math.max(0.45, Math.min(1.55, terrainScore * 0.65 + scalarFit * 0.35));
+  }
+
+  addEvent(msg, color, options = {}) {
+    const event = {
+      msg,
+      color: color || '#c9a84c',
+      tick: this.tick,
+      day: this.day,
+      month: this.month,
+      year: this.year,
+      hour: this.dayTime,
+      overlay: options.overlay !== false
+    };
+
+    this.events.unshift(event);
+    if (this.events.length > 300) this.events.pop();
+
+    // Browser dev console, plus the in-game console if it exists.
+    console.log(`[Y${this.year} M${this.month} D${this.day} ${String(this.dayTime).padStart(2, '0')}:00] ${msg}`);
+    if (typeof UI !== 'undefined' && UI.addConsoleEvent) UI.addConsoleEvent(event);
   }
 }
 
